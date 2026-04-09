@@ -103,8 +103,9 @@ node_modules/
 public/src/
 
 # Meshy AI raw downloads — must be Draco-compressed before landing in assets/models/
-# (per ADR-0005 + ADR-0010)
-raw/
+# (per ADR-0005 + ADR-0010). README is the exception so the workflow stays documented.
+raw/*
+!raw/README.md
 
 # Vercel deploy artifacts
 .vercel/
