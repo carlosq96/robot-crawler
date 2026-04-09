@@ -9,21 +9,28 @@
  *   - Load the player config and create the player entity (system #5)
  *   - Wire the camera rig to follow the player mesh
  *   - Set up a ground plane so the player has something to stand on
+ *   - Initialize Input Manager and create the Movement Controller (system #6)
  *
  * Systems wired here:
- *   - Engine Bootstrap (src/engine/bootstrap.ts)
- *   - Camera Rig      (src/engine/camera-rig.ts)
- *   - Player System   (src/gameplay/player.ts)
+ *   - Engine Bootstrap  (src/engine/bootstrap.ts)
+ *   - Camera Rig        (src/engine/camera-rig.ts)
+ *   - Player System     (src/gameplay/player.ts)
+ *   - Input Manager     (src/engine/input.ts)
+ *   - Movement System   (src/gameplay/movement.ts)
  *
  * NOTE: Player System registers its own engine.onAfterStep (mesh-body sync)
  * and engine.onBeforeRender (anim.update) callbacks internally. main.ts must
  * NOT re-register those — only the camera rig update lives here.
+ * NOTE: Movement Controller registers its own engine.onBeforeStep callback
+ * internally. main.ts must NOT register a separate onBeforeStep for movement.
  */
 
 import * as THREE from 'three';
 import { init } from './engine/bootstrap.js';
+import { init as initInput } from './engine/input.js';
 import { createFollowRig, type FollowRigConfig } from './engine/camera-rig.js';
 import { createPlayer, type PlayerConfig } from './gameplay/player.js';
+import { createMovementController, type MovementConfig } from './gameplay/movement.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -110,7 +117,36 @@ try {
   engine.scene.add(ground);
   console.log('[main] Ground plane added (50×50)');
 
-  console.log('[main] Robot Crawler scene ready — player on screen, idle animation playing');
+  // -------------------------------------------------------------------------
+  // Step 6 — Initialize Input Manager (system #4)
+  //
+  // Must be initialized before Movement Controller because the controller
+  // holds a reference to the InputManager handle and calls it every tick.
+  // Input Manager loads bindings from /assets/data/input-bindings.json and
+  // sensitivity config from /assets/data/input.json; both fall back to
+  // defaults gracefully without throwing.
+  // -------------------------------------------------------------------------
+  const input = await initInput(canvas);
+  console.log('[main] Input Manager initialized');
+
+  // -------------------------------------------------------------------------
+  // Step 7 — Load movement config and create Movement Controller (system #6)
+  //
+  // Movement Controller registers its own engine.onBeforeStep callback
+  // internally — do NOT add an onBeforeStep here for movement.
+  // All tuning values come from movement.json; nothing is hardcoded.
+  // -------------------------------------------------------------------------
+  const movementConfigResp = await fetch('/assets/data/movement.json');
+  if (!movementConfigResp.ok) {
+    throw new Error(`[main] Failed to load movement.json: HTTP ${movementConfigResp.status}`);
+  }
+  const movementConfig = (await movementConfigResp.json()) as MovementConfig;
+
+  const movement = createMovementController(engine, player, input, movementConfig);
+  console.log('[main] Movement Controller created — WASD + jump + aim active');
+  console.log('[main] Aim direction (initial):', movement.getAimDirection());
+
+  console.log('[main] Robot Crawler Vertical Slice 1 ready — WASD to move, Space to jump');
 } catch (err) {
   showFallback('Engine failed to initialize. Open the browser console for details.');
   console.error('[main] Startup failed:', err);
