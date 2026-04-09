@@ -1,16 +1,42 @@
-# Game Concept — Robot Crawler
+# Game Concept — Space Runner
 
-*Created: 2026-04-08*
+*Created: 2026-04-09 (pivot from Robot Crawler)*
 *Status: Approved*
 *Vibe Jam 2026 entry — deadline May 1 2026 @ 13:37 UTC*
+*Internal repo name: `robot-crawler` (not renamed — see CLAUDE.md note)*
+
+---
+
+## Pivot Notice
+
+On **2026-04-09**, the project pivoted from a Megaman Legends-inspired co-op
+dungeon crawler ("Robot Crawler") to an endless space runner ("Space Runner").
+The old concept and MML-era design documents are archived under
+`design/archive/mml-dungeon-crawler/`.
+
+**Why the pivot:** With 22 days left in the jam, the original scope carried
+three L-effort systems (Buster Combat, Dungeon Generator, In-Room Sync netcode)
+any one of which could blow the deadline. Space Runner reuses the six
+already-implemented systems nearly as-is, drops all netcode and procedural
+dungeon risk, and is a genre that solo devs can realistically ship in three
+weeks. The pivot was a scope-first decision, not a creative disappointment.
+
+**What we keep:** Tech stack (Three.js r174 + Rapier + TypeScript + CDN
+importmap + Meshy asset pipeline), the six implemented systems (Engine
+Bootstrap, Input Manager, Camera Rig, Animation Controller, Player System,
+Movement — Movement needs rework), the robot hero model, all ADRs except
+ADR-0002 (Colyseus) and ADR-0004 (server-authoritative combat) which are
+superseded by this pivot.
 
 ---
 
 ## Elevator Pitch
 
-A 3D dungeon crawler where you drop into procedurally generated robot ruins,
-gun down enemies with your buster cannon, and race friends or strangers for
-the best score on every dungeon seed.
+A solo 3D endless runner. You're a robot bolting across hostile alien
+planets, auto-sprinting forward and dodging lethal terrain. At each planet's
+end, a **jump-gate warps you to the next planet** — a different biome, faster
+speed, nastier hazards. You never stop. You never win. You die when your HP
+runs out, and the number on the screen is how far you got.
 
 ---
 
@@ -18,118 +44,146 @@ the best score on every dungeon seed.
 
 | Aspect | Detail |
 |---|---|
-| Genre | 3D action shooter / dungeon crawler / score-attack |
+| Genre | 3D endless runner / score-attack |
 | Platform | Web browser (desktop, Chrome/Firefox/Safari) |
-| Player Count | Solo or co-op 2-3 |
-| Session Length | 5-15 min per run |
+| Player Count | Solo only — no multiplayer |
+| Session Length | 30 seconds to ~5 minutes per run |
 | Monetization | None — free, no login, username only |
-| Inspirations | Megaman Legends (vibe + buster), Risk of Rain 2 (loop), Hades (run scoring) |
+| Inspirations | Pepsi Man (PS1), Temple Run, Subway Surfers, Tron (visual) |
+| Working Title | Space Runner (jam submission title) |
+| Internal Repo | `robot-crawler` (not renamed; affects GitHub + Vercel + Railway URLs) |
 
 ---
 
 ## Core Fantasy
 
-You're a salvager pilot. Your ship is your home. Below you is a procedurally
-generated robot ruin full of crystals, danger, and someone else's high score.
-Drop in, blast through, climb the leaderboard, return to upgrade. The buster
-on your arm is the only friend you need.
+You're a robot explorer on a one-way express across the galaxy. Each planet
+is a fresh obstacle course rolling at you — and you're already running before
+you've seen the terrain. React, dodge, punch through the walls you can't
+dodge. The jump-gate at the end of each planet is a promise: *"there's
+another world coming, and it's harder."* You stop only when your circuits
+give out.
 
 ---
 
 ## The Hook
 
-**Every dungeon is a competitive race.** Each procedural seed produces the
-exact same dungeon for everyone. Clear it, publish your seed, and the
-leaderboard tracks who blasted through fastest with the highest kill+crystal
-score. Friends can race the seed you found yesterday.
+**Endless + biome-hop.** Most endless runners put you on one surface forever.
+Space Runner warps you to a **new planet** every ~60-90 seconds — new palette,
+new hazards, faster base speed. Each run is a tour of the galaxy. The
+leaderboard ranks players by total distance and planets cleared.
 
 ---
 
 ## Core Loop
 
-- **30 seconds (moment-to-moment)**: WASD movement, mouse aim, hold buster
-  to charge, release to fire. Auto-lock-on biased toward aim direction. Pick
-  up crystals as world drops.
-- **5-15 minutes (run)**: Ship → pick seed → drop → fight 4-6 rooms →
-  boss room → clear → score posted → return to ship.
-- **30-90 minutes (session)**: Run several seeds, upgrade buster + armor
-  between runs, climb leaderboards, share seeds you discovered.
+- **1-3 seconds (moment-to-moment):** Auto-running forward. Dodge left,
+  dodge right, jump, slide, or fire your Super Suit attack at a wall or
+  enemy you can't dodge around.
+- **60-90 seconds (planet segment):** Run one full planet. Dodge 40-60
+  hazards, collect crystals, hit the jump-gate at the end → full HP restore,
+  score bonus, +1 planet counter.
+- **3-10 minutes (run):** Chain 3-8+ planets with rising difficulty until
+  HP hits zero. Run ends; score posted to leaderboard.
+- **10-30 minutes (session):** Multiple runs. Chase personal best. Climb
+  the global leaderboard.
 
 ---
 
 ## Game Pillars (3 — non-negotiable)
 
-1. **Buster combat is the whole game.** Must feel crunchy and weighty in
-   the first 5 seconds. Lock-on removes camera fight so players focus on
-   positioning and charge timing.
-2. **Every run is a score.** Every clear or fail produces a number. Numbers
-   go on a leaderboard. Leaderboards are the meta-game.
-3. **Co-op is pure cooperation.** No PvP, no grief, no FOMO. Friends play
-   together, share crystals evenly, revive each other.
+1. **Feel over depth.** Every dodge, every jump, every slide must feel
+   crisp. Input → visual response under 100 ms. No combos, no skill trees —
+   just reaction and rhythm.
+2. **Every planet is a fresh surprise.** Biomes differ visually *and*
+   mechanically. No two adjacent planets should feel the same.
+3. **The score is the whole game.** No unlockables that make you stronger.
+   No meta-progression that trivializes future runs. Improvement comes from
+   playing better, not grinding.
 
 ---
 
 ## Anti-Pillars (what this game is NOT)
 
-- **NOT a roguelike** — no permadeath, no run-locked builds, no meta grind
-- **NOT a walkable ship** — cockpit is a UI screen, not a 3D space
-- **NOT a story game** — no NPCs, no dialogue, no cutscenes, no lore dumps
-- **NOT a 100-hour game** — full content fits in one evening; replay value
-  is leaderboards
+- **NOT multiplayer** — solo only, no co-op, no PvP, no Colyseus rooms
+- **NOT a roguelike** — no permadeath + meta currency, no item builds
+- **NOT a platformer** — jumps are reactive, not puzzle-precision
+- **NOT a fighting game** — Super Suit attack is a survival tool, not the point
+- **NOT a story game** — no NPCs, no dialogue, no cutscenes beyond a jump-gate warp
+- **NOT a 100-hour game** — mastered in an evening; replay is leaderboards
 
 ---
 
 ## Locked Design Decisions
 
-These were resolved 2026-04-08 before /map-systems:
+Resolved 2026-04-09 during the pivot conversation. Do not re-litigate.
 
-- **Boss room**: one fixed boss type for the entire game. Not scaled by
-  Journey Level. Difficulty comes from the dungeon path, not the boss tier.
-- **Sub-weapon recipes**: dual source — recipes can be **built in the ship**
-  from accumulated currency, **OR found as drops** while dungeon-crawling.
-  Both paths feed the same sub-weapon inventory.
-- **Disconnect handling**: disconnected player is kicked to lobby with a
-  **reconnect option** during a grace period (e.g. 60s). Run continues for
-  remaining players. If they reconnect in time, they rejoin in spectator
-  mode and respawn at the next room transition.
-- **Camera**: **fixed third-person follow** (Megaman Legends style) for the
-  jam. The follow rig must be a swappable component — leave the architecture
-  open to add a player-controlled orbit camera later if the fixed follow
-  feels too dated in playtests.
+- **Movement model:** Free 3D lateral movement on a forward auto-running
+  corridor (Pepsi Man style, **not** Temple Run 3-lane). Player controls
+  lateral dodge continuously; forward speed is automatic.
+- **Hit model:** HP-based. Player has an HP pool that depletes from hazard
+  or enemy hits. At 0 HP, the run ends. **HP fully restores on planet
+  transition** (jump-gate heal).
+- **Planet structure:** Each planet is a single ~60-90-second forward
+  segment ending in a jump-gate. Procedural obstacle layout per planet,
+  pulled from a biome-specific template pool. Jump-gate is a fixed end
+  marker, not a boss fight.
+- **Endless mode:** True endless. No final boss, no "you win" screen. The
+  game ends when HP reaches 0.
+- **Super Suit (combat):** Always-on with cooldown timer (not a pickup).
+  Activating the Super Suit briefly empowers the player: running-punch
+  breaks certain obstacles and one-shots certain enemies. Cooldown ~8-12
+  seconds. Meant for use on things you can't dodge, not as a primary verb.
+- **Planet biomes (v1):** Three biomes — **Rocky**, **Ice**, **Volcanic** —
+  recycled with rising difficulty. A fourth biome (Alien Jungle) is a T2
+  stretch goal.
+- **Pickups:** Crystals are **score only**. No crystal-to-power conversions,
+  no crystal-activated super suit. Simpler = better for jam scope.
+- **Camera:** Chase-cam locked behind and slightly above the player. Fixed
+  angle. **FOV punches forward** on speed increase for a kinesthetic cue.
+- **Solo only:** No Colyseus, no rooms, no matchmaking. Leaderboard is a
+  simple POST to a single Postgres table (still hosted on Railway).
+- **Jam submission title:** "Space Runner". Internal repo stays
+  `robot-crawler` to avoid breaking GitHub + Vercel + Railway deploy URLs.
 
 ---
 
 ## MVP (must ship by May 1)
 
-1. Solo player with WASD + mouse aim
-2. Buster cannon (energy infinite, hold-to-charge)
-3. One sub-weapon slot (resource ammo; recipes built in ship OR found in dungeon)
-4. One dungeon archetype with combat + resource room types
-5. Boss room (one fixed boss type)
-6. 3-5 enemy types
-7. Crystal pickup + run-end score
-8. Shareable seeds + per-seed leaderboard
-9. Co-op 2-3 players via Colyseus, with disconnect-and-reconnect grace period
-10. Ship cockpit UI: buster upgrades, armor upgrades, seed picker, sub-weapon crafting
-11. Fixed third-person follow camera (swappable rig)
+1. Auto-running player with lateral dodge, jump, slide
+2. Three planet biomes (Rocky, Ice, Volcanic) with distinct palettes + hazards
+3. Procedural obstacle placement per planet from biome templates
+4. HP system + damage-on-hit + death state
+5. Jump-gate checkpoint between planets + warp transition
+6. Super Suit attack (one button, cooldown)
+7. Crystal pickups + score accumulator
+8. HUD: distance, HP, crystals, super-suit cooldown, planet name
+9. Title → run → death → results → retry loop
+10. Global leaderboard via Postgres POST
+11. Chase-cam with speed-based FOV punch
 
 ---
 
-## Stretch (only if MVP is locked by Apr 22)
+## Stretch (only if MVP is locked by Apr 25)
 
-- Elite rooms (mid-tier mini-bosses)
-- Second sub-weapon slot
-- Custom shaders (charged buster glow, hit flash)
-- Gamepad full support
-- Player-controlled orbit camera as alternate option
+- **4th biome:** Alien Jungle
+- **Enemies** (not just static hazards) — forward-patrolling drones the
+  player can Super Suit-punch for score
+- **Biome-specific music tracks**
+- **Charged Super Suit** (hold-to-charge for a bigger hit)
+- **Daily seed leaderboard** (same planet sequence for all players that day)
+- **Cosmetic robot skins** unlocked by distance thresholds
 
 ---
 
 ## Top 3 Risks
 
-1. **Multiplayer netcode harder than estimated**
-   → Fallback: ship solo only; leaderboard still works
-2. **Procgen quality slow to dial in**
-   → Fallback: 3 hand-crafted dungeons; seeds become "variant" overlays
-3. **Three.js perf on integrated GPUs**
-   → Fallback: cap polycount, drop shadows, reduce texture resolution
+1. **Feel tuning takes too long**
+   → Fallback: lock reasonable values early; iterate only on movement
+   friction, not input mapping. Set a "good enough" bar and move on.
+2. **Procedural obstacle layouts produce unfair situations**
+   → Fallback: hand-craft 4-6 obstacle template "chunks" per biome and
+   randomize the chunk order. Trades variety for safety guarantee.
+3. **Meshy AI can't generate biome-matching ground tiles fast enough**
+   → Fallback: use simple PBR tiled materials (no unique mesh per biome);
+   swap color / normal / roughness per biome.

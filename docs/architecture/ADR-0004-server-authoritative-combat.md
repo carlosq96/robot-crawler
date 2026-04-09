@@ -2,11 +2,24 @@
 
 ## Status
 
-Accepted
+**Superseded** — 2026-04-09 by the Space Runner pivot. This ADR depended on
+ADR-0002 (Colyseus) and existed to protect multiplayer combat from client
+cheating. The pivot to a solo endless runner removes all multiplayer
+combat, so server-authoritative combat is no longer applicable. Space
+Runner runs all gameplay logic client-side; the only server interaction is
+a single HTTP POST to the leaderboard at run-end.
+
+**Leaderboard integrity note:** Because combat now runs client-side, a
+determined cheater could inflate their leaderboard score by modifying the
+POST payload. For a free jam with no stakes, this is an accepted risk. A
+simple mitigation is a server-side sanity cap (reject distance values
+beyond a plausibility threshold). If anti-cheat becomes important
+post-jam, this ADR's reasoning is a valid starting point for a revival.
 
 ## Date
 
-2026-04-08
+2026-04-08 (Accepted)
+2026-04-09 (Superseded)
 
 ## Last Verified
 

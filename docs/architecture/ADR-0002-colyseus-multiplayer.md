@@ -2,11 +2,21 @@
 
 ## Status
 
-Accepted
+**Superseded** — 2026-04-09 by the Space Runner pivot. The project dropped
+multiplayer entirely when the game concept pivoted from a co-op dungeon
+crawler to a solo endless runner. No Colyseus server, no rooms, no schema
+sync. The leaderboard is now a simple HTTP POST to Postgres via Express
+(no WebSocket layer). See `design/gdd/game-concept.md` and
+`design/archive/mml-dungeon-crawler/game-concept.md` for pivot context.
+
+The technical reasoning in this ADR remains sound for any future project
+that needs co-op web multiplayer — it is preserved here as historical
+record, not as an active constraint.
 
 ## Date
 
-2026-04-08
+2026-04-08 (Accepted)
+2026-04-09 (Superseded)
 
 ## Last Verified
 

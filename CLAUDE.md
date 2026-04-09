@@ -1,5 +1,9 @@
-# Claude Code Game Studios — Robot Crawler
+# Claude Code Game Studios — Space Runner
 ## Vibe Jam 2026 Entry
+
+> **Public title:** Space Runner
+> **Internal repo name:** `robot-crawler` (not renamed — affects GitHub, Vercel, Railway deploy URLs)
+> **Pivoted from:** Robot Crawler (MML-style co-op dungeon crawler) on 2026-04-09. See `design/archive/mml-dungeon-crawler/` for the superseded plan.
 
 ## JAM CONSTRAINTS (NON-NEGOTIABLE)
 - Deadline: May 1 2026 @ 13:37 UTC
@@ -9,36 +13,41 @@
 - New game created after March 24 2026
 
 ## GAME CONCEPT
-Megaman Legends-inspired 3D dungeon crawler.
-Ship hub → select/generate dungeon → drop in solo or co-op (up to 3 players) →
-shoot enemies with buster + sub-weapons → collect crystals → return to ship → upgrade.
-Procedural dungeons with shareable seeds and per-seed leaderboards.
+Solo 3D endless runner in space.
+Title → drop onto a hostile planet → auto-run forward → dodge / jump / slide
+past hazards → reach the jump-gate → warp to the next (harder) planet → repeat
+until HP hits 0 → leaderboard.
+Three biomes (Rocky, Ice, Volcanic) recycled with rising difficulty.
+One combat verb: Super Suit attack on cooldown (breaks obstacles, one-shots enemies).
+Inspirations: Pepsi Man, Temple Run, Subway Surfers.
 
 ## FOUNDATIONAL DOCUMENTS
-- Game Design Document: @design/game-design-document.md
+- Game Concept: @design/gdd/game-concept.md
+- Systems Index: @design/gdd/systems-index.md
 - Technical Design Document: @design/tech-stack.md
 - Architecture Map: @docs/architecture.md
 
 ## TECH STACK
 - Renderer: Three.js r174 (CDN importmap, no bundler)
 - Physics: @dimforge/rapier3d-compat (WASM)
-- Multiplayer: Colyseus 0.15 (authoritative server, self-hosted on Railway)
-- Persistence: Railway Postgres via pg (same Railway project as server)
+- Persistence: Railway Postgres via pg — single `runs` table for global leaderboard
 - Assets: Meshy AI → GLB → Three.js GLTFLoader + DRACOLoader
 - Frontend deploy: Vercel (auto-deploy from GitHub main)
-- Server deploy: Railway Node.js buildpack
+- Server deploy: Railway Node.js buildpack (Express only, no Colyseus)
 - Language: TypeScript everywhere (server + client). Client is per-file `tsc` transpiled at Vercel deploy time — NOT bundled. Output is plain ES modules consumed via importmap. See ADR-0001 + ADR-0008.
+- **Dropped in pivot:** Colyseus (no multiplayer), @colyseus/schema, server-authoritative combat. See Superseded ADR-0002 and ADR-0004.
 
 ## LAYER OWNERSHIP
-- Colyseus → all realtime during sessions (positions, combat, loot, revival)
-- Postgres → all persistence between sessions (seeds, scores, crystals, level)
-- Rapier   → all physics (movement, collision, projectiles)
+- Postgres → leaderboard persistence (one write per run-end POST)
+- Rapier   → all physics (movement, collision, hazard detection)
 - Three.js → rendering only, no game logic
+- Express  → HTTP leaderboard endpoints only (no realtime sockets)
 
 ## STUDIO AGENTS IN USE
 Engine: Three.js web (no Godot/Unity/Unreal agents — use web-specialist workflows)
 Active agent set: game-designer, lead-programmer, gameplay-programmer,
-network-programmer, ui-programmer, performance-analyst, qa-tester
+ui-programmer, performance-analyst, qa-tester
+(network-programmer removed from active set after the pivot — no netcode)
 
 ## COLLABORATION PROTOCOL
 Every task: Question → Options → Decision → Draft → Approval
