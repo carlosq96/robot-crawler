@@ -98,6 +98,17 @@ __pycache__/
 node_modules/
 .npm/
 
+# === Robot Crawler — Build Outputs ===
+# TypeScript transpile output (per ADR-0008): client .ts → public/src/*.js at deploy time
+public/src/
+
+# Meshy AI raw downloads — must be Draco-compressed before landing in assets/models/
+# (per ADR-0005 + ADR-0010)
+raw/
+
+# Vercel deploy artifacts
+.vercel/
+
 # === Archives ===
 *.zip
 *.tar.gz

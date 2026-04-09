@@ -1,0 +1,30 @@
+{
+  "name": "robot-crawler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Megaman Legends-inspired 3D dungeon crawler. Vibe Jam 2026 entry.",
+  "type": "module",
+  "scripts": {
+    "compress-models": "node scripts/compress-models.mjs",
+    "build:client": "tsc -p tsconfig.client.json",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "npm run build:client && npm run build:server",
+    "watch:client": "tsc -p tsconfig.client.json --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "gltf-pipeline": "^4.1.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "@types/three": "^0.174.0",
+    "@types/node": "^20.11.0"
+  },
+  "dependencies": {
+    "colyseus": "^0.15.0",
+    "@colyseus/schema": "^2.0.0",
+    "express": "^4.19.0",
+    "pg": "^8.11.0",
+    "@types/express": "^4.17.0",
+    "@types/pg": "^8.11.0"
+  }
+}
