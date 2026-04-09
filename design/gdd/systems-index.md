@@ -28,7 +28,7 @@ meaningful axis at jam scale is what we cut first when time runs out.
 | # | System Name | Category | Priority | Layer | Status | Design Doc | Depends On |
 |---|---|---|---|---|---|---|---|
 | 1 | Engine Bootstrap | Core | T1 | L0 | Implemented | design/quick-specs/engine-bootstrap-2026-04-08.md | — |
-| 2 | Input Manager | Core | T1 | L0 | Approved | design/quick-specs/input-manager-2026-04-08.md | — |
+| 2 | Input Manager | Core | T1 | L0 | Implemented | design/quick-specs/input-manager-2026-04-08.md | — |
 | 3 | Persistence Layer | Persistence | T1 | L0 | Not Started | — | — |
 | 4 | Camera Rig | Core | T1 | L1 | Approved | design/quick-specs/camera-rig-2026-04-08.md | Engine Bootstrap |
 | 5 | Animation Controller | Core | T1 | L1 | Approved | design/quick-specs/animation-controller-2026-04-08.md | Engine Bootstrap |

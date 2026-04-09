@@ -1,0 +1,8 @@
+{
+  "mouseSensitivityX": 1.0,
+  "mouseSensitivityY": 1.0,
+  "mouseInvertY": false,
+  "mouseSmoothing": 0.0,
+  "gamepadDeadzone": 0.15,
+  "pauseOnBlur": true
+}

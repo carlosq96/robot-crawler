@@ -1,0 +1,17 @@
+{
+  "moveForward":   { "type": "key",         "code": "KeyW" },
+  "moveBack":      { "type": "key",         "code": "KeyS" },
+  "moveLeft":      { "type": "key",         "code": "KeyA" },
+  "moveRight":     { "type": "key",         "code": "KeyD" },
+  "jump":          { "type": "key",         "code": "Space" },
+  "shoot":         { "type": "mouseButton", "button": 0 },
+  "chargeStart":   { "type": "mouseButton", "button": 0 },
+  "chargeRelease": { "type": "mouseButton", "button": 0 },
+  "subWeapon":     { "type": "mouseButton", "button": 2 },
+  "interact":      { "type": "key",         "code": "KeyE" },
+  "pause":         { "type": "key",         "code": "Escape" },
+  "confirm":       { "type": "key",         "code": "Enter" },
+  "cancel":        { "type": "key",         "code": "Escape" },
+  "aimX":          { "type": "mouseAxisX" },
+  "aimY":          { "type": "mouseAxisY" }
+}

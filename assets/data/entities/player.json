@@ -1,0 +1,37 @@
+{
+  "modelUrl": "/assets/models/player/robot_hero.glb",
+  "animationsUrl": "/assets/models/player/robot_hero_animations.glb",
+  "spawnPosition": { "x": 0, "y": 2, "z": 0 },
+  "maxHp": 100,
+  "capsuleRadius": 0.4,
+  "capsuleHeight": 1.0,
+  "reviveHpFraction": 0.5,
+  "initialAnimationState": "idle",
+  "animation": {
+    "clipMap": {
+      "idle":   "Idle_02",
+      "walk":   "Walking",
+      "run":    "Running",
+      "sprint": "RunFast",
+      "hit":    "BeHit_FlyUp",
+      "death":  "Dead",
+      "jump":   "Regular_Jump"
+    },
+    "loopMap": {
+      "idle":   true,
+      "walk":   true,
+      "run":    true,
+      "sprint": true,
+      "hit":    false,
+      "death":  false,
+      "jump":   false
+    },
+    "returnState": "idle",
+    "defaultCrossfade": 0.2,
+    "crossfadeOverrides": {
+      "hit":  0.05,
+      "jump": 0.05
+    },
+    "events": []
+  }
+}
