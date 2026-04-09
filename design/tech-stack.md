@@ -5,7 +5,8 @@
 - @dimforge/rapier3d-compat — physics
 - @colyseus/sdk — multiplayer client
 - GLTFLoader + DRACOLoader — load Meshy AI GLB assets
-- Vanilla JS ES modules — no framework, no bundler
+- TypeScript ^5 source, per-file `tsc` transpile to ES modules at Vercel deploy time (NOT bundled — see ADR-0001 + ADR-0008)
+- No framework (no React/Vue/Svelte), no bundler
 
 ## Server (Colyseus)
 - Node.js 20+
@@ -31,11 +32,20 @@
 - Railway Postgres (persistence) — managed, same project as server
 
 ## Key Architecture Decisions
-- No bundler (Vite etc) — CDN only for jam instant-load compliance
-- Server-authoritative combat (Colyseus) — prevents cheating, sync is clean
+
+All ten ADRs are formally documented in `docs/architecture/` and **Accepted** as of 2026-04-08:
+
+- **ADR-0001** — No bundler (CDN importmap only) — jam instant-load compliance
+- **ADR-0002** — Colyseus over SpacetimeDB / WebRTC — TypeScript end-to-end, fits dungeon room model
+- **ADR-0003** — Railway Postgres over Supabase — same platform as server, one DATABASE_URL
+- **ADR-0004** — Server-authoritative combat — prevents cheating, simpler sync
+- **ADR-0005** — Draco compression mandatory on all GLBs — total asset load under 10MB
+- **ADR-0006** — Postgres write only on `onDispose` — clean atomic transaction per run
+- **ADR-0007** — Fixed Rapier timestep (1/60) — deterministic physics for multiplayer + seeded dungeons
+- **ADR-0008** — TypeScript everywhere with deploy-time per-file transpile — type safety without bundling
+- **ADR-0009** — Three.js WebGLRenderer over WebGPURenderer — Firefox/Safari support for jam audience
+- **ADR-0010** — Meshy AI as primary 3D asset pipeline — only viable solo art workflow for 23-day jam
+
+Other supporting facts:
 - Shared procedural seed — same seed = same dungeon for all players and leaderboard
-- Draco compression mandatory on all GLBs — keep total asset load under 10MB
-- Railway Postgres over Supabase — same platform, one DATABASE_URL, no extra account
 - Postgres over SQLite — SQLite cannot handle concurrent multiplayer writes
-- Write to Postgres only on run resolution (clear/fail) — clean atomic transaction
-  in Colyseus `onDispose()`, never mid-dungeon

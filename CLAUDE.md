@@ -27,7 +27,7 @@ Procedural dungeons with shareable seeds and per-seed leaderboards.
 - Assets: Meshy AI → GLB → Three.js GLTFLoader + DRACOLoader
 - Frontend deploy: Vercel (auto-deploy from GitHub main)
 - Server deploy: Railway Node.js buildpack
-- Language: Vanilla JS ES modules (client), TypeScript (server)
+- Language: TypeScript everywhere (server + client). Client is per-file `tsc` transpiled at Vercel deploy time — NOT bundled. Output is plain ES modules consumed via importmap. See ADR-0001 + ADR-0008.
 
 ## LAYER OWNERSHIP
 - Colyseus → all realtime during sessions (positions, combat, loot, revival)

@@ -6,9 +6,9 @@
 
 ## Engine & Language
 
-- **Engine**: Three.js r174 (NOT a traditional game engine — pure JS/WebGL via importmap)
-- **Language**: Vanilla JavaScript ES modules (client), TypeScript (server)
-- **Rendering**: Three.js `WebGLRenderer` (NOT WebGPU — browser support varies)
+- **Engine**: Three.js r174 (NOT a traditional game engine — pure TS/WebGL via importmap)
+- **Language**: TypeScript ^5.x everywhere (server + client). Client source files are `.ts`, transpiled per-file by `tsc` at Vercel deploy time into `public/src/*.js` (ES modules). NOT bundled — 1:1 file mapping. See ADR-0008.
+- **Rendering**: Three.js `WebGLRenderer` (NOT WebGPU — browser support varies; see ADR-0009)
 - **Physics**: Rapier 3D via `@dimforge/rapier3d-compat` (WASM, bundler-free)
 - **Multiplayer**: Colyseus 0.15 (server) + `@colyseus/sdk` (client)
 - **Persistence**: Railway Postgres via `pg` npm (server-only, write on `onDispose`)
@@ -27,7 +27,7 @@
 - **Classes**: `PascalCase` (e.g., `DungeonRoom`, `Player`, `Buster`)
 - **Variables**: `camelCase` (e.g., `playerHp`, `lockedTarget`)
 - **Constants**: `SCREAMING_SNAKE_CASE` (e.g., `MAX_PLAYERS`, `BUSTER_COOLDOWN_MS`)
-- **Files**: `kebab-case.js` for client (e.g., `dungeon-gen.js`, `lock-on.js`); `PascalCase.ts` for server schema/room files (e.g., `DungeonRoom.ts`, `GameState.ts`)
+- **Files**: `kebab-case.ts` for client (e.g., `dungeon-gen.ts`, `lock-on.ts`); `PascalCase.ts` for server schema/room files (e.g., `DungeonRoom.ts`, `GameState.ts`); `kebab-case.ts` for shared schemas in `shared/schemas/`
 - **Events/Messages**: `kebab-case` strings (e.g., `room.send("shoot", ...)`, `room.send("revive", ...)`)
 - **Data files**: `kebab-case.json` (e.g., `enemy-types.json`, `weapon-stats.json`)
 
@@ -57,7 +57,8 @@
 
 - ❌ **Bundlers** (Vite, Webpack, Parcel, esbuild, Rollup) — jam rule, instant load via CDN importmap
 - ❌ **Frameworks** (React, Vue, Svelte, Solid) — overkill, breaks no-bundler rule
-- ❌ **`npm install` on the client** — client uses CDN imports only; no `package.json` for client code
+- ❌ **Per-client `package.json`** — there is ONE `package.json` at the repo root for `tsc` + server deps; the client never imports from `node_modules` at runtime. All third-party client code resolves via the CDN importmap.
+- ❌ **Client runtime imports from `node_modules`** — bare specifiers in client code (`import * as THREE from 'three'`) are resolved at runtime by the importmap, never bundled in
 - ❌ **`new Vector3()` / `new Quaternion()` in animation loop** — pre-allocate module-level temps
 - ❌ **`document.querySelector()` for game UI** — use Three.js HUD via Canvas/Sprite, or a single overlay HTML layer updated by ID
 - ❌ **Per-frame Postgres writes** — only `onDispose()` in Colyseus rooms writes to DB
@@ -77,13 +78,14 @@
 - `@colyseus/sdk@^0.15` — multiplayer client
 - (Anything else requires an ADR.)
 
-### Server (npm)
+### Server + Build (one root `package.json`)
 - `colyseus@^0.15`
 - `@colyseus/schema@^2`
 - `express@^4`
 - `pg@^8` — Postgres client
-- `typescript@^5`
+- `typescript@^5` — used by BOTH server build AND client deploy-time transpile (per ADR-0008)
 - `vitest@^1` — tests
+- `gltf-pipeline` (dev only) — Draco compression CLI per ADR-0005
 - (Anything else requires an ADR.)
 
 ### Asset Pipeline (external tools)
@@ -93,16 +95,19 @@
 
 ## Architecture Decisions Log
 
-<!-- Quick reference linking to full ADRs in docs/architecture/ -->
-<!-- TODO: write ADRs for the decisions below via /architecture-decision -->
+Quick reference linking to full ADRs in `docs/architecture/`. All ten are
+**Accepted** as of 2026-04-08.
 
-- [PENDING] ADR-0001 — No bundler (CDN importmap only)
-- [PENDING] ADR-0002 — Colyseus over SpacetimeDB / WebRTC
-- [PENDING] ADR-0003 — Railway Postgres over Supabase
-- [PENDING] ADR-0004 — Server-authoritative combat (no client trust)
-- [PENDING] ADR-0005 — Draco compression mandatory on all GLBs
-- [PENDING] ADR-0006 — Postgres write only on `onDispose` (atomic per run)
-- [PENDING] ADR-0007 — Fixed Rapier timestep (1/60) for determinism + sync
+- [Accepted] [ADR-0001 — No bundler (CDN importmap only)](../../docs/architecture/ADR-0001-no-bundler.md)
+- [Accepted] [ADR-0002 — Colyseus over SpacetimeDB / WebRTC](../../docs/architecture/ADR-0002-colyseus-multiplayer.md)
+- [Accepted] [ADR-0003 — Railway Postgres over Supabase](../../docs/architecture/ADR-0003-railway-postgres.md)
+- [Accepted] [ADR-0004 — Server-authoritative combat (no client trust)](../../docs/architecture/ADR-0004-server-authoritative-combat.md)
+- [Accepted] [ADR-0005 — Draco compression mandatory on all GLBs](../../docs/architecture/ADR-0005-draco-compression.md)
+- [Accepted] [ADR-0006 — Postgres write only on `onDispose`](../../docs/architecture/ADR-0006-postgres-on-dispose.md)
+- [Accepted] [ADR-0007 — Fixed Rapier timestep (1/60)](../../docs/architecture/ADR-0007-fixed-rapier-timestep.md)
+- [Accepted] [ADR-0008 — TypeScript everywhere with deploy-time transpile](../../docs/architecture/ADR-0008-typescript-everywhere.md)
+- [Accepted] [ADR-0009 — Three.js WebGLRenderer over WebGPURenderer](../../docs/architecture/ADR-0009-threejs-webgl-over-webgpu.md)
+- [Accepted] [ADR-0010 — Meshy AI as primary 3D asset pipeline](../../docs/architecture/ADR-0010-meshy-asset-pipeline.md)
 
 ## Engine Specialists
 
@@ -121,10 +126,11 @@
 
 | File Extension / Type | Specialist to Spawn |
 |-----------------------|---------------------|
-| `src/main.js`, `src/engine/*.js` | `engine-programmer` |
-| `src/gameplay/*.js`, `src/combat/*.js` | `gameplay-programmer` |
-| `src/networking/*.js` | `network-programmer` |
-| `src/ui/*.js` | `ui-programmer` |
+| `src/main.ts`, `src/engine/*.ts` | `engine-programmer` |
+| `src/gameplay/*.ts`, `src/combat/*.ts` | `gameplay-programmer` |
+| `src/networking/*.ts` | `network-programmer` |
+| `src/ui/*.ts` | `ui-programmer` |
+| `shared/schemas/*.ts` | `network-programmer` (Colyseus schemas shared between client + server) |
 | `server/rooms/*.ts`, `server/index.ts` | `network-programmer` (Colyseus is server netcode) |
 | `server/schemas/*.ts` | `network-programmer` |
 | `server/routes/*.ts`, `server/db/*.ts` | `engine-programmer` (Postgres + Express infrastructure) |
