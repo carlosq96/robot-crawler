@@ -346,24 +346,28 @@ export function createMovementController(
     const isGrounded = groundHit !== null;
 
     // -----------------------------------------------------------------------
-    // Spec section 3 — Jump (edge-triggered, with in-ground-window lockout)
+    // Spec section 3 — Jump (edge-triggered, velocity-gated lockout)
     //
     // jumpRequested is set by the onActionPressed('jump') subscriber (exactly
     // once per key press — holding space does not retrigger).
     //
-    // justJumpedInGroundWindow prevents double-jumps that would otherwise
-    // occur because the ground-check ray still reports isGrounded=true for
-    // 1-2 ticks after liftoff (the ray is 0.15m long and the body only rises
-    // ~0.1m per tick at jumpVelocity=6.0). We clear the flag when the body
-    // is fully airborne (below).
+    // justJumpedInGroundWindow prevents double-jumps in the 1-2 ticks after
+    // liftoff when the ground-check ray still reports isGrounded=true because
+    // the ray is 0.15m long and the body only rises ~0.1m per tick at
+    // jumpVelocity=6. Instead of clearing on airborne (which is fragile — the
+    // ray can flicker on/off during takeoff), we clear when the upward velocity
+    // decays to zero (body peaks or starts falling). By that time the body is
+    // clearly past the ground-check window.
     //
     // The jump animation is triggered here as a one-shot ('jump' clip). The
-    // Animation Controller auto-returns to 'idle' when the clip finishes, and
-    // the per-frame walk/idle transitions below resume when the player lands.
+    // walk/idle transition block below skips while currentAnimState === 'jump'
+    // so the one-shot plays cleanly until the Animation Controller's finished
+    // event returns state to 'idle'.
     // -----------------------------------------------------------------------
+    const linvelForJump = player.body.linvel();
+
     if (jumpRequested && isGrounded && !justJumpedInGroundWindow) {
-      const linvel = player.body.linvel();
-      player.body.setLinvel({ x: linvel.x, y: config.jumpVelocity, z: linvel.z }, true);
+      player.body.setLinvel({ x: linvelForJump.x, y: config.jumpVelocity, z: linvelForJump.z }, true);
       player.anim.play('jump');
       justJumpedInGroundWindow = true;
     }
@@ -371,9 +375,10 @@ export function createMovementController(
     // of whether it was applied. Prevents stale requests from accumulating.
     jumpRequested = false;
 
-    // Clear the lockout once the body is clearly above the ground-check window.
-    // Next time isGrounded becomes true (player lands), a fresh jump can fire.
-    if (!isGrounded && justJumpedInGroundWindow) {
+    // Clear the lockout when the upward impulse is spent. At peak of arc
+    // (linvel.y ≤ 0) we know the body has passed the ground-check window, and
+    // the next isGrounded transition will be a genuine landing.
+    if (justJumpedInGroundWindow && linvelForJump.y <= 0.01) {
       justJumpedInGroundWindow = false;
     }
 
@@ -427,18 +432,28 @@ export function createMovementController(
     // When no input: _desiredVel is already (0,0,0) — decelerate toward zero
 
     // -----------------------------------------------------------------------
-    // Spec section 2 — Velocity smoothing with frame-rate-independent lerp
+    // Spec section 2 — Velocity smoothing (exponential decay, rate-based)
     //
-    // lerpRate = acceleration when input active, deceleration when not.
-    // Frame-rate-independent formula: alpha = 1 - Math.pow(1 - rate, dt * 60)
-    // matches the pattern used by the Camera Rig (camera-rig.ts line 283).
+    // `acceleration` and `deceleration` are rate constants in 1/sec (time to
+    // reach ~63% of target). The correct frame-rate-independent formula for a
+    // rate-based exponential approach is:
     //
-    // While airborne, scale the lerp rate by airControl so the player can
-    // nudge direction mid-jump but not fully redirect instantly.
+    //   alpha = 1 - Math.exp(-rate * dt)
+    //
+    // At rate=15, dt=1/60: alpha ≈ 0.22 per tick (smooth, not snappy)
+    // At rate=20, dt=1/60: alpha ≈ 0.28 per tick
+    //
+    // While airborne, scale the rate by airControl so the player can nudge
+    // direction mid-jump but not fully redirect instantly.
+    //
+    // NOTE: An earlier version used `1 - Math.pow(1 - rate, dt * 60)` which
+    // worked for Camera Rig (where factor is 0..1) but broke here because
+    // acceleration=15 made the base negative, making alpha ≈ 1.0 every tick
+    // (instant snap) and causing diagonal-movement stutter.
     // -----------------------------------------------------------------------
     const baseRate = isInputActive ? config.acceleration : config.deceleration;
     const lerpRate = isGrounded ? baseRate : baseRate * config.airControl;
-    const alpha = 1 - Math.pow(1 - Math.min(lerpRate, 0.9999), fixedDt * 60);
+    const alpha = 1 - Math.exp(-lerpRate * fixedDt);
 
     const linvel = player.body.linvel();
     _currentHorizVel.set(linvel.x, 0, linvel.z);
@@ -504,17 +519,26 @@ export function createMovementController(
     // Threshold 0.1 m/s² (horizontal speed) to distinguish moving from stopped.
     // We check getCurrentState() before calling play() to avoid redundant
     // crossfade triggers on every tick.
+    //
+    // IMPORTANT: skip walk/idle transitions if the current state is 'jump' or
+    // 'hit' — those are one-shot animations. The Animation Controller returns
+    // to 'idle' automatically when they finish. Without this guard, the next
+    // tick after play('jump') would see currentState='jump' !== 'walk' and
+    // immediately override the jump animation with walk/idle, making the jump
+    // anim visually invisible.
     // -----------------------------------------------------------------------
-    const horizSpeedSq = _currentHorizVel.x * _currentHorizVel.x + _currentHorizVel.z * _currentHorizVel.z;
+    const currentAnimState = player.anim.getCurrentState();
+    const isOneShotActive = currentAnimState === 'jump' || currentAnimState === 'hit';
 
-    if (isGrounded) {
+    if (isGrounded && !isOneShotActive) {
+      const horizSpeedSq = _currentHorizVel.x * _currentHorizVel.x + _currentHorizVel.z * _currentHorizVel.z;
       if (horizSpeedSq > 0.01) {
         // 0.01 = 0.1² (compare squared values, no sqrt needed)
-        if (player.anim.getCurrentState() !== 'walk') {
+        if (currentAnimState !== 'walk') {
           player.anim.play('walk');
         }
       } else {
-        if (player.anim.getCurrentState() !== 'idle') {
+        if (currentAnimState !== 'idle') {
           player.anim.play('idle');
         }
       }

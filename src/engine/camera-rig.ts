@@ -57,6 +57,12 @@ const _desiredLookAt = new THREE.Vector3();
 /** Scratch vector used to read target world position. */
 const _targetWorldPos = new THREE.Vector3();
 
+/** Scratch vector used to hold the local-space offset before rotation. */
+const _localOffset = new THREE.Vector3();
+
+/** Scratch quaternion used to read target world quaternion. */
+const _targetWorldQuat = new THREE.Quaternion();
+
 // ---------------------------------------------------------------------------
 // Public API — LOCKED (every consumer that drives the camera depends on this).
 // Changes to CameraRig require updating all concrete implementations and an ADR.
@@ -227,8 +233,27 @@ export function createFollowRig(
     update(realDt: number): void {
       if (disposed || target === null) return;
 
-      // Fetch target's current world position (handles parented objects correctly).
+      // Fetch target's current world position AND world rotation.
+      // Using world-space transforms so parented objects work correctly.
       target.getWorldPosition(_targetWorldPos);
+      target.getWorldQuaternion(_targetWorldQuat);
+
+      // ------------------------------------------------------------------
+      // Rotate the configured offset by the target's yaw so the camera stays
+      // BEHIND the player regardless of which direction they are facing.
+      //
+      // The configured offset (offsetX, offsetY, offsetZ) is in the target's
+      // LOCAL space: +Z = directly behind (because the player model's forward
+      // is -Z after the 180° spawn rotation, so "behind" is +Z local).
+      //
+      // Applying _targetWorldQuat to the local offset transforms it into
+      // world space, producing a camera position that orbits with the player's
+      // yaw. The look-at point is already yaw-independent (same XZ as target,
+      // just raised by lookAtOffsetY) so the camera always points at the
+      // player's chest.
+      // ------------------------------------------------------------------
+      _localOffset.set(config.offsetX, config.offsetY, config.offsetZ);
+      _localOffset.applyQuaternion(_targetWorldQuat);
 
       // ------------------------------------------------------------------
       // On first update after attaching a target, snap the camera and lookAt
@@ -237,9 +262,9 @@ export function createFollowRig(
       // ------------------------------------------------------------------
       if (!initialized) {
         _desiredPos.set(
-          _targetWorldPos.x + config.offsetX,
-          _targetWorldPos.y + config.offsetY,
-          _targetWorldPos.z + config.offsetZ,
+          _targetWorldPos.x + _localOffset.x,
+          _targetWorldPos.y + _localOffset.y,
+          _targetWorldPos.z + _localOffset.z,
         );
         camera.position.copy(_desiredPos);
 
@@ -257,9 +282,9 @@ export function createFollowRig(
       // Compute desired pose this frame.
       // ------------------------------------------------------------------
       _desiredPos.set(
-        _targetWorldPos.x + config.offsetX,
-        _targetWorldPos.y + config.offsetY,
-        _targetWorldPos.z + config.offsetZ,
+        _targetWorldPos.x + _localOffset.x,
+        _targetWorldPos.y + _localOffset.y,
+        _targetWorldPos.z + _localOffset.z,
       );
 
       _desiredLookAt.set(
