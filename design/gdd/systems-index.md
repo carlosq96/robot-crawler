@@ -217,10 +217,10 @@ This is a better architecture than the naive direct coupling anyway.
 | Metric | Count |
 |---|---|
 | Total systems identified | 22 |
-| Design docs started | 3 |
+| Design docs started | 4 |
 | Design docs reviewed | 0 |
-| Design docs approved | 3 |
-| **T1 (Must Ship) systems designed** | 3 / 17 |
+| Design docs approved | 4 |
+| **T1 (Must Ship) systems designed** | 4 / 17 |
 | **T2 (Ship If Time) systems designed** | 0 / 5 |
 
 ---
