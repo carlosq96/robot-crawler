@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "public/src",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmitOnError": false,
+    "declaration": false,
+    "sourceMap": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "public", "dist", "raw"]
+}

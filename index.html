@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Crawler — Vibe Jam 2026</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #0a0a0f;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #ffffff;
+    }
+    #game-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      outline: none;
+    }
+    #fallback {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      max-width: 80%;
+      display: none;
+    }
+    #fallback.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas" tabindex="0"></canvas>
+  <div id="fallback">
+    <h1>Robot Crawler</h1>
+    <p>Loading failed. Open the browser console for details.</p>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://esm.sh/three@0.174.0",
+      "three/addons/": "https://esm.sh/three@0.174.0/examples/jsm/",
+      "@dimforge/rapier3d-compat": "https://esm.sh/@dimforge/rapier3d-compat@0.14.0",
+      "@colyseus/sdk": "https://esm.sh/@colyseus/sdk@0.15.17"
+    }
+  }
+  </script>
+  <script type="module" src="/public/src/main.js"></script>
+</body>
+</html>

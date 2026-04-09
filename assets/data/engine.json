@@ -1,0 +1,13 @@
+{
+  "FIXED_TIMESTEP_SEC": 0.01666667,
+  "ACCUMULATOR_CAP_SEC": 0.25,
+  "GRAVITY_X": 0,
+  "GRAVITY_Y": -9.81,
+  "GRAVITY_Z": 0,
+  "PIXEL_RATIO_CAP": 2,
+  "SHADOW_MAP_SIZE": 1024,
+  "FOV_DEG": 60,
+  "NEAR_PLANE": 0.1,
+  "FAR_PLANE": 200,
+  "DRACO_DECODER_PATH": "https://www.gstatic.com/draco/v1/decoders/"
+}

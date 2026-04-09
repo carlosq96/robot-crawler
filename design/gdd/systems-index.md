@@ -36,7 +36,7 @@ meaningful axis at jam scale is what we cut first when time runs out.
 | 7 | Lobby System | Multiplayer | T1 | L1 | Not Started | — | Engine Bootstrap, Persistence Layer |
 | 8 | Player System | Gameplay | T1 | L2 | Approved | design/quick-specs/player-system-2026-04-09.md | Engine Bootstrap, Input Manager, Animation Controller, Camera Rig |
 | 9 | Settings (inferred) | Meta | T2 | L2 | Not Started | — | Engine Bootstrap, Audio System |
-| 10 | Movement | Gameplay | T1 | L3 | Not Started | — | Player System, Input Manager |
+| 10 | Movement | Gameplay | T1 | L3 | Approved | design/quick-specs/movement-2026-04-09.md | Player System, Input Manager |
 | 11 | Enemy System | Gameplay | T1 | L3 | Not Started | — | Engine Bootstrap, Animation Controller, Audio System |
 | 12 | Pickup System | Gameplay | T1 | L3 | Not Started | — | Engine Bootstrap, Player System, Audio System |
 | 13 | Buster Combat (incl. Lock-On) | Gameplay | T1 | L4 | Not Started | — | Player System, Input Manager, Enemy System, Audio System, Animation Controller, Pickup System |
@@ -217,10 +217,10 @@ This is a better architecture than the naive direct coupling anyway.
 | Metric | Count |
 |---|---|
 | Total systems identified | 22 |
-| Design docs started | 5 |
+| Design docs started | 6 |
 | Design docs reviewed | 0 |
-| Design docs approved | 5 |
-| **T1 (Must Ship) systems designed** | 5 / 17 |
+| Design docs approved | 6 |
+| **T1 (Must Ship) systems designed** | 6 / 17 |
 | **T2 (Ship If Time) systems designed** | 0 / 5 |
 
 ---

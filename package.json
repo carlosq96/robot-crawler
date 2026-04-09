@@ -10,13 +10,18 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:client && npm run build:server",
     "watch:client": "tsc -p tsconfig.client.json --watch",
+    "dev": "concurrently -k -n tsc,serve -c blue,green \"npm run watch:client\" \"npx serve . -l 3000\"",
     "test": "vitest run"
   },
   "devDependencies": {
+    "three": "^0.174.0",
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "@colyseus/sdk": "^0.15.17",
+    "concurrently": "^8.2.2",
+    "serve": "^14.2.4",
     "gltf-pipeline": "^4.1.0",
     "typescript": "^5.4.0",
     "vitest": "^1.4.0",
-    "@types/three": "^0.174.0",
     "@types/node": "^20.11.0"
   },
   "dependencies": {
