@@ -30,7 +30,7 @@ meaningful axis at jam scale is what we cut first when time runs out.
 | 1 | Engine Bootstrap | Core | T1 | L0 | Approved | design/quick-specs/engine-bootstrap-2026-04-08.md | — |
 | 2 | Input Manager | Core | T1 | L0 | Approved | design/quick-specs/input-manager-2026-04-08.md | — |
 | 3 | Persistence Layer | Persistence | T1 | L0 | Not Started | — | — |
-| 4 | Camera Rig | Core | T1 | L1 | Not Started | — | Engine Bootstrap |
+| 4 | Camera Rig | Core | T1 | L1 | Approved | design/quick-specs/camera-rig-2026-04-08.md | Engine Bootstrap |
 | 5 | Animation Controller | Core | T1 | L1 | Not Started | — | Engine Bootstrap |
 | 6 | Audio System | Audio | T1 | L1 | Not Started | — | Engine Bootstrap |
 | 7 | Lobby System | Multiplayer | T1 | L1 | Not Started | — | Engine Bootstrap, Persistence Layer |
@@ -217,10 +217,10 @@ This is a better architecture than the naive direct coupling anyway.
 | Metric | Count |
 |---|---|
 | Total systems identified | 22 |
-| Design docs started | 2 |
+| Design docs started | 3 |
 | Design docs reviewed | 0 |
-| Design docs approved | 2 |
-| **T1 (Must Ship) systems designed** | 2 / 17 |
+| Design docs approved | 3 |
+| **T1 (Must Ship) systems designed** | 3 / 17 |
 | **T2 (Ship If Time) systems designed** | 0 / 5 |
 
 ---
