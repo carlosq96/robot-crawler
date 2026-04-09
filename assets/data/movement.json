@@ -7,5 +7,6 @@
   "groundCheckDistance": 0.15,
   "yawSensitivity": 0.003,
   "pitchSensitivity": 0.003,
-  "pitchClampDegrees": 60
+  "pitchClampDegrees": 60,
+  "turnRadPerSec": 10.0
 }

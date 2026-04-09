@@ -26,6 +26,7 @@
  */
 
 import * as THREE from 'three';
+import * as RAPIER from '@dimforge/rapier3d-compat';
 import { init } from './engine/bootstrap.js';
 import { init as initInput } from './engine/input.js';
 import { createFollowRig, type FollowRigConfig } from './engine/camera-rig.js';
@@ -97,6 +98,38 @@ try {
   console.log('[main] Player created — id:', player.id, '| hp:', player.getHp(), '| state:', player.getState());
 
   // -------------------------------------------------------------------------
+  // Step 3.5 — Rotate player to face away from the camera + lock angular DOF
+  //
+  // The Meshy GLB exports the model facing +Z (toward the viewer). Our camera
+  // sits behind the player at +Z (per camera.json offset), so the default
+  // orientation shows the player's face. Rotate the body 180° around Y so we
+  // see the player's back. The mesh-body sync in Player System propagates
+  // body.rotation → mesh.quaternion every onAfterStep.
+  //
+  // Quaternion for 180° rotation around Y axis: (x=0, y=1, z=0, w=0).
+  //
+  // THEN: lock ALL angular rotations. A dynamic capsule with free rotation
+  // tumbles when horizontal velocity is applied (the ground-contact friction
+  // creates torque at the body bottom while the center of mass moves). The
+  // result is the capsule tipping over on every WASD input, which manifests
+  // as the player falling on its back/face/side. Standard character-controller
+  // fix: disable angular motion entirely. The body translates only; the mesh
+  // stays upright at the orientation we just set.
+  //
+  // When we add "face movement direction" later, we'll re-enable Y rotation
+  // via setEnabledRotations(false, true, false, true) and drive Y yaw from
+  // Movement. For now, full lock = zero tumbling.
+  // -------------------------------------------------------------------------
+  player.body.setRotation({ x: 0, y: 1, z: 0, w: 0 }, true);
+  // Lock X and Z angular DOF (anti-tumble) but allow Y (yaw) so Movement can
+  // rotate the player to face its velocity direction. This replaces per-direction
+  // strafe animations with "walk forward + rotate to face" — modern third-person
+  // convention, and the only animation we need is walk. Movement writes yaw each
+  // tick; physics will not rotate the body on its own in X or Z.
+  player.body.setEnabledRotations(false, true, false, true);
+  console.log('[main] Player rotated 180° + X/Z angular lock (Y yaw controlled by Movement)');
+
+  // -------------------------------------------------------------------------
   // Step 4 — Attach camera rig to player mesh and wire update
   // -------------------------------------------------------------------------
   rig.setTarget(player.mesh);
@@ -115,7 +148,30 @@ try {
   ground.receiveShadow = true;
   ground.position.y = -0.25; // top surface sits at y=0
   engine.scene.add(ground);
-  console.log('[main] Ground plane added (50×50)');
+
+  // -------------------------------------------------------------------------
+  // Step 5b — Rapier ground collider (matches the visual ground exactly)
+  //
+  // The visual mesh above is just rendering — Rapier needs its OWN body to
+  // make the player land on something. We create a static (fixed) body with
+  // a cuboid collider matching the BoxGeometry dimensions.
+  //
+  // RAPIER.ColliderDesc.cuboid takes HALF-extents:
+  //   half-X = 25 (full width 50)
+  //   half-Y = 0.25 (full height 0.5)
+  //   half-Z = 25 (full depth 50)
+  //
+  // Position matches the visual ground: y = -0.25 so the top surface is at y=0.
+  //
+  // TODO: when Dungeon Generator (system 15) lands, this is replaced by
+  // procedurally-generated room colliders. For Vertical Slice 1 a single
+  // 50×50 plane is enough to test movement.
+  // -------------------------------------------------------------------------
+  const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.25, 0);
+  const groundBody = engine.world.createRigidBody(groundBodyDesc);
+  const groundColliderDesc = RAPIER.ColliderDesc.cuboid(25, 0.25, 25);
+  engine.world.createCollider(groundColliderDesc, groundBody);
+  console.log('[main] Ground plane added (50×50, visual + Rapier collider)');
 
   // -------------------------------------------------------------------------
   // Step 6 — Initialize Input Manager (system #4)

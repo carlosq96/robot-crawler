@@ -9,8 +9,8 @@
   "initialAnimationState": "idle",
   "animation": {
     "clipMap": {
-      "idle":   "Idle_02",
-      "walk":   "Walking",
+      "idle":   "Walking",
+      "walk":   "Idle_02",
       "run":    "Running",
       "sprint": "RunFast",
       "hit":    "BeHit_FlyUp",

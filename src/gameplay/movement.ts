@@ -93,6 +93,11 @@ export interface MovementConfig {
   pitchSensitivity: number;
   /** Maximum up/down look angle in degrees. Below 90 to avoid camera gimbal flip. Default: 60. */
   pitchClampDegrees: number;
+  /**
+   * Maximum player body rotation rate in radians per second when turning to face
+   * movement direction. ~10 rad/sec ≈ 180° in 0.31s. Default: 10.0.
+   */
+  turnRadPerSec: number;
 }
 
 /**
@@ -208,6 +213,28 @@ export function createMovementController(
   /** Whether dispose() has been called. Guards against double-disposal. */
   let disposed: boolean = false;
 
+  /**
+   * Edge-triggered jump request. Set to true when the jump action transitions
+   * from not-held to held (via onActionPressed). Consumed and reset each update
+   * regardless of whether it was used, so a single key press only jumps once.
+   */
+  let jumpRequested: boolean = false;
+
+  /**
+   * Window-lockout flag that prevents a double-jump from the ground-check ray
+   * reporting "grounded" for 1-2 ticks after the jump impulse is applied
+   * (because the ray's 0.15m length still hits the floor while the body rises
+   * through the first few centimeters of liftoff). Set to true when a jump
+   * fires, cleared when isGrounded becomes false (the body is fully airborne).
+   */
+  let justJumpedInGroundWindow: boolean = false;
+
+  // Subscribe to the jump action's rising edge. Input Manager's onActionPressed
+  // fires exactly once per keydown, so held jump keys do not retrigger.
+  const unsubJumpPressed = input.onActionPressed('jump', (): void => {
+    jumpRequested = true;
+  });
+
   // -------------------------------------------------------------------------
   // Capsule bottom offset
   //
@@ -319,12 +346,35 @@ export function createMovementController(
     const isGrounded = groundHit !== null;
 
     // -----------------------------------------------------------------------
-    // Spec section 3 — Jump
-    // Only triggers on the rising edge of the jump action while grounded.
+    // Spec section 3 — Jump (edge-triggered, with in-ground-window lockout)
+    //
+    // jumpRequested is set by the onActionPressed('jump') subscriber (exactly
+    // once per key press — holding space does not retrigger).
+    //
+    // justJumpedInGroundWindow prevents double-jumps that would otherwise
+    // occur because the ground-check ray still reports isGrounded=true for
+    // 1-2 ticks after liftoff (the ray is 0.15m long and the body only rises
+    // ~0.1m per tick at jumpVelocity=6.0). We clear the flag when the body
+    // is fully airborne (below).
+    //
+    // The jump animation is triggered here as a one-shot ('jump' clip). The
+    // Animation Controller auto-returns to 'idle' when the clip finishes, and
+    // the per-frame walk/idle transitions below resume when the player lands.
     // -----------------------------------------------------------------------
-    if (isGrounded && input.isActionDown('jump')) {
+    if (jumpRequested && isGrounded && !justJumpedInGroundWindow) {
       const linvel = player.body.linvel();
       player.body.setLinvel({ x: linvel.x, y: config.jumpVelocity, z: linvel.z }, true);
+      player.anim.play('jump');
+      justJumpedInGroundWindow = true;
+    }
+    // Always consume the request — a single press fires one jump attempt regardless
+    // of whether it was applied. Prevents stale requests from accumulating.
+    jumpRequested = false;
+
+    // Clear the lockout once the body is clearly above the ground-check window.
+    // Next time isGrounded becomes true (player lands), a fresh jump can fire.
+    if (!isGrounded && justJumpedInGroundWindow) {
+      justJumpedInGroundWindow = false;
     }
 
     // -----------------------------------------------------------------------
@@ -401,6 +451,54 @@ export function createMovementController(
     );
 
     // -----------------------------------------------------------------------
+    // Face movement direction
+    //
+    // Rather than maintaining separate strafe animations, the player body
+    // rotates to face its velocity direction. The walk animation always plays
+    // "forward," and the rotation sells the direction change. Only X/Z angular
+    // DOF are locked at spawn (main.ts); Y is enabled so this setRotation()
+    // has effect.
+    //
+    // We use isInputActive (input keys held) rather than horizSpeedSq so the
+    // player doesn't slowly drift rotation during deceleration after keys are
+    // released. The unit direction comes from _desiredVel (normalized then
+    // scaled by walkSpeed — atan2 is scale-invariant so the walkSpeed factor
+    // does not matter).
+    //
+    // targetYaw = atan2(velX, velZ) — derivation:
+    //   The model at yaw=0 faces +Z (verified by the initial 180° flip we
+    //   applied to face -Z). Rotation around Y by angle Y takes +Z → (sinY,0,cosY).
+    //   Setting (sinY, cosY) = (velX/|v|, velZ/|v|) gives Y = atan2(velX, velZ).
+    // -----------------------------------------------------------------------
+    if (isInputActive) {
+      const targetYaw = Math.atan2(_desiredVel.x, _desiredVel.z);
+      const currentRot = player.body.rotation();
+      // Extract yaw from quaternion (rotation around Y axis):
+      //   yaw = atan2(2(wy + xz), 1 - 2(y² + x²))
+      const currentYaw = Math.atan2(
+        2 * (currentRot.w * currentRot.y + currentRot.x * currentRot.z),
+        1 - 2 * (currentRot.y * currentRot.y + currentRot.x * currentRot.x),
+      );
+
+      // Shortest-path angle delta in (-π, π]
+      let deltaYaw = targetYaw - currentYaw;
+      while (deltaYaw > Math.PI) deltaYaw -= 2 * Math.PI;
+      while (deltaYaw < -Math.PI) deltaYaw += 2 * Math.PI;
+
+      // Clamp the applied delta to the max turn rate
+      const maxDelta = config.turnRadPerSec * fixedDt;
+      const appliedDelta = Math.max(-maxDelta, Math.min(maxDelta, deltaYaw));
+      const newYaw = currentYaw + appliedDelta;
+
+      // Write back as a Y-axis quaternion: (0, sin(Y/2), 0, cos(Y/2))
+      const halfYaw = newYaw / 2;
+      player.body.setRotation(
+        { x: 0, y: Math.sin(halfYaw), z: 0, w: Math.cos(halfYaw) },
+        true,
+      );
+    }
+
+    // -----------------------------------------------------------------------
     // Spec section 5 — Animation state transitions
     //
     // Threshold 0.1 m/s² (horizontal speed) to distinguish moving from stopped.
@@ -463,8 +561,9 @@ export function createMovementController(
 
       disposed = true;
 
-      // Spec section 8 — Unregister the onBeforeStep callback
+      // Spec section 8 — Unregister all callbacks
       unsubBeforeStep();
+      unsubJumpPressed();
     },
   };
 
