@@ -395,13 +395,24 @@ export async function createPlayer(
   // Movement, Buster Combat, etc. write to body via Rapier API; the sync here
   // makes the visual mesh follow the authoritative physics position.
   //
+  // CAPSULE-BOTTOM OFFSET:
+  // The GLB model's origin is at the character's FEET (standard Meshy/Blender
+  // export convention), but the Rapier capsule's center sits at body.translation().
+  // If we copy body.translation() directly to mesh.position, the mesh's feet
+  // appear at the capsule CENTER — the player visually floats ~0.9 m above the
+  // ground.
+  //
+  // Fix: subtract (capsuleHeight/2 + capsuleRadius) from the Y component so the
+  // mesh's feet land at the capsule's BOTTOM (ground contact point).
+  //
   // We reuse module-level _syncPos to avoid per-step allocations.
   // -------------------------------------------------------------------------
+  const meshYOffset = config.capsuleHeight / 2 + config.capsuleRadius;
   const unsubAfterStep = engine.onAfterStep(() => {
     if (disposed) return;
     const t = body.translation();
     const r = body.rotation();
-    _syncPos.set(t.x, t.y, t.z);
+    _syncPos.set(t.x, t.y - meshYOffset, t.z);
     playerMesh.position.copy(_syncPos);
     playerMesh.quaternion.set(r.x, r.y, r.z, r.w);
   });
