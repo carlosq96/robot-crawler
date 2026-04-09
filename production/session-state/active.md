@@ -88,7 +88,31 @@ Init: robot crawler — vibe jam 2026                      (160dc10)
 
 ## Current task
 
-**Verify Vertical Slice 1 visually.** All 6 systems are in. Next test: `npm run dev` → http://localhost:3000 → press WASD → player should walk → press Space → player should jump → mouse → aim direction tracked.
+**Vertical Slice 1 bug-fix pass in progress.** All 6 systems implemented; first playtest revealed 6 bugs, all fixed in commit `dce0e7f`. Re-test in progress.
+
+### Bug fix log (2026-04-09 playtest)
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | Player fell through ground | Added Rapier fixed body + cuboid collider to main.ts matching the visual ground |
+| 2 | Player faced camera instead of away | `body.setRotation(180° around Y)` after createPlayer |
+| 3 | Capsule tumbled on any WASD input | `setEnabledRotations(false, true, false, true)` — X/Z locked, Y enabled for yaw control |
+| 4 | No strafe animations | Movement rotates body to face velocity direction (yaw-follow), always plays `walk` |
+| 5 | Idle/walk clips swapped in feel | Swapped `clipMap` entries in player.json — Meshy labels were misleading |
+| 6 | Jump had no anim + double-jump possible | Edge-triggered via `onActionPressed`, lockout flag prevents ground-window double-jump, `anim.play('jump')` added |
+
+See `design/quick-specs/movement-2026-04-09.md` Implementation Addendum for the authoritative behavioral spec.
+
+### Current control scheme (post-fix)
+
+| Input | Behavior |
+|---|---|
+| **WASD** | Camera-relative movement; player rotates to face velocity direction (~180° in 0.31s at 10 rad/s) |
+| **Space** | Jump when grounded; one jump per press; no double-jump |
+| **Mouse** | Accumulates aim direction (read by future Buster Combat); does NOT rotate camera |
+| **Release keys** | Player decelerates, returns to idle anim |
+
+Camera is fixed third-person follow (Megaman Legends convention). Player rotates under a fixed camera. No strafe animations needed.
 
 ---
 
