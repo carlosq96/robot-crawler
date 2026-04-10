@@ -121,9 +121,10 @@ Resolved 2026-04-09 during the pivot conversation. Do not re-litigate.
 - **Movement model:** Free 3D lateral movement on a forward auto-running
   corridor (Pepsi Man style, **not** Temple Run 3-lane). Player controls
   lateral dodge continuously; forward speed is automatic.
-- **Hit model:** HP-based. Player has an HP pool that depletes from hazard
-  or enemy hits. At 0 HP, the run ends. **HP fully restores on planet
-  transition** (jump-gate heal).
+- **Hit model:** One-hit death. Touching any obstacle ends the run
+  immediately. No HP bar, no damage numbers, no healing.
+  Superseded 2026-04-09 from an earlier HP-based design — simpler and
+  more true to Pepsi Man / Temple Run than an HP crawl.
 - **Planet structure:** Each planet is a single ~60-90-second forward
   segment ending in a jump-gate. Procedural obstacle layout per planet,
   pulled from a biome-specific template pool. Jump-gate is a fixed end
@@ -153,11 +154,11 @@ Resolved 2026-04-09 during the pivot conversation. Do not re-litigate.
 1. Auto-running player with lateral dodge, jump, slide
 2. Three planet biomes (Rocky, Ice, Volcanic) with distinct palettes + hazards
 3. Procedural obstacle placement per planet from biome templates
-4. HP system + damage-on-hit + death state
+4. On-touch death (any obstacle contact → run ends)
 5. Jump-gate checkpoint between planets + warp transition
 6. Super Suit attack (one button, cooldown)
 7. Crystal pickups + score accumulator
-8. HUD: distance, HP, crystals, super-suit cooldown, planet name
+8. HUD: distance, crystals, super-suit cooldown, planet name
 9. Title → run → death → results → retry loop
 10. Global leaderboard via Postgres POST
 11. Chase-cam with speed-based FOV punch

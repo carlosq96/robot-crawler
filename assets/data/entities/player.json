@@ -1,36 +1,53 @@
 {
   "modelUrl": "/assets/models/player/robot_hero.glb",
-  "animationsUrl": "/assets/models/player/robot_hero_animations.glb",
+  "animationsUrls": [
+    "/assets/models/player/anim_run_fast.glb",
+    "/assets/models/player/anim_running.glb",
+    "/assets/models/player/anim_slide.glb",
+    "/assets/models/player/anim_jump.glb",
+    "/assets/models/player/anim_attack.glb",
+    "/assets/models/player/anim_death.glb"
+  ],
   "spawnPosition": { "x": 0, "y": 2, "z": 0 },
-  "maxHp": 100,
+  "maxHp": 1,
   "capsuleRadius": 0.4,
   "capsuleHeight": 1.0,
-  "reviveHpFraction": 0.5,
-  "initialAnimationState": "idle",
+  "reviveHpFraction": 1.0,
+  "initialAnimationState": "sprint",
   "animation": {
+    "_comment_clipmap": "Space Runner split-export pipeline (2026-04-09). Each clip lives in its own GLB to avoid Meshy's bundled-export mislabel bug (bundled RunFast was 148-unit leap data — split RunFast is clean 2-unit run cycle). Clip names use Meshy's Armature|name|baselayer format. When switching to a different Meshy character pack, re-check exact clip names via the diagnostic log on boot.",
     "clipMap": {
-      "idle":   "Walking",
-      "walk":   "Idle_02",
-      "run":    "Running",
-      "sprint": "RunFast",
-      "hit":    "BeHit_FlyUp",
-      "death":  "Dead",
-      "jump":   "Regular_Jump"
+      "sprint": "Armature|RunFast|baselayer",
+      "run":    "Armature|running|baselayer",
+      "slide":  "Armature|slide_light|baselayer",
+      "jump":   "Armature|Jump_Over_Obstacle_2|baselayer",
+      "attack": "Armature|Rising_Flying_Kick|baselayer",
+      "death":  "Armature|Dead|baselayer"
     },
     "loopMap": {
-      "idle":   true,
-      "walk":   true,
-      "run":    true,
       "sprint": true,
-      "hit":    false,
-      "death":  false,
-      "jump":   false
+      "run":    true,
+      "slide":  false,
+      "jump":   false,
+      "attack": false,
+      "death":  false
     },
-    "returnState": "idle",
+    "returnState": "sprint",
+    "holdOnFinish": ["jump"],
     "defaultCrossfade": 0.2,
     "crossfadeOverrides": {
-      "hit":  0.05,
-      "jump": 0.05
+      "jump":   0.05,
+      "attack": 0.05,
+      "slide":  0.05
+    },
+    "startOffsets": {
+      "jump": 0.2
+    },
+    "timeScales": {
+      "_comment": "Real RunFast clip is now in use (split export). Start at 1.0 — if the default pace feels too jogging-y, bump to 1.2-1.5.",
+      "sprint": 1.0,
+      "run":    1.0,
+      "slide":  1.0
     },
     "events": []
   }

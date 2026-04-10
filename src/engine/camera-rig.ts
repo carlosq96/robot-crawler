@@ -239,21 +239,18 @@ export function createFollowRig(
       target.getWorldQuaternion(_targetWorldQuat);
 
       // ------------------------------------------------------------------
-      // Rotate the configured offset by the target's yaw so the camera stays
-      // BEHIND the player regardless of which direction they are facing.
+      // Camera offset is WORLD-SPACE fixed — not rotated by the target's
+      // quaternion. Space Runner's player never yaws (all angular DOF are
+      // locked), so rotating the offset by the body's quaternion just
+      // introduces jitter from tiny Rapier quaternion drift. The camera
+      // sits at a constant world-space position relative to the player.
       //
-      // The configured offset (offsetX, offsetY, offsetZ) is in the target's
-      // LOCAL space: +Z = directly behind (because the player model's forward
-      // is -Z after the 180° spawn rotation, so "behind" is +Z local).
-      //
-      // Applying _targetWorldQuat to the local offset transforms it into
-      // world space, producing a camera position that orbits with the player's
-      // yaw. The look-at point is already yaw-independent (same XZ as target,
-      // just raised by lookAtOffsetY) so the camera always points at the
-      // player's chest.
+      // For a game where the player rotates (e.g. the old MML design),
+      // uncomment the applyQuaternion line below to make the camera orbit
+      // with the player's facing direction.
       // ------------------------------------------------------------------
       _localOffset.set(config.offsetX, config.offsetY, config.offsetZ);
-      _localOffset.applyQuaternion(_targetWorldQuat);
+      // _localOffset.applyQuaternion(_targetWorldQuat); // disabled for Space Runner
 
       // ------------------------------------------------------------------
       // On first update after attaching a target, snap the camera and lookAt

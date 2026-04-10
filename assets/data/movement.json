@@ -1,12 +1,10 @@
 {
-  "walkSpeed": 5.0,
-  "acceleration": 15.0,
-  "deceleration": 20.0,
-  "jumpVelocity": 6.0,
-  "airControl": 0.4,
-  "groundCheckDistance": 0.15,
-  "yawSensitivity": 0.003,
-  "pitchSensitivity": 0.003,
-  "pitchClampDegrees": 60,
-  "turnRadPerSec": 5.0
+  "forwardSpeed": 12.0,
+  "lateralSpeed": 15.0,
+  "lateralAcceleration": 40.0,
+  "jumpVelocity": 8.0,
+  "airControl": 0.8,
+  "slideDuration": 0.6,
+  "slideSpeedBoost": 4.0,
+  "groundCheckDistance": 0.08
 }

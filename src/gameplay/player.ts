@@ -19,9 +19,13 @@
  *             in onBeforeRender
  *   ADR-0008  TypeScript everywhere — .js extensions on local imports; strict mode
  *
- * Dual-GLB pattern: robot_hero.glb carries the mesh + skeleton; robot_hero_animations.glb
- * carries the 13 animation clips. Both are loaded and merged before creating the
- * AnimationController, because Meshy auto-rig separates mesh and animation exports.
+ * Split-export pattern: robot_hero.glb carries the mesh + skeleton; N separate
+ * anim_*.glb files each carry ONE animation clip. The Animation Controller
+ * receives the concatenated clip array from all N files. We use the split
+ * format because Meshy's bundled multi-clip exporter has a label-vs-data mismatch
+ * bug where some clips (notably RunFast) end up with the wrong keyframe data
+ * under the right name — verified 2026-04-09 via keyframe extraction. Split
+ * export gives one label per file and eliminates the mislabel vector entirely.
  *
  * Data-driven: ALL numeric values come from the PlayerConfig parameter (loaded from
  * assets/data/entities/player.json by the caller). Zero hardcoded gameplay values.
@@ -57,14 +61,20 @@ export type PlayerState = 'alive' | 'downed' | 'dead' | 'spectator';
  * assets/data/entities/player.json by the caller (main.ts or a room manager).
  * No defaults are applied here — all fields are required in the JSON.
  *
- * NOTE: animationsUrl is required because Meshy auto-rig exports mesh and
- * animation clips as separate GLBs. Both are loaded and merged at creation time.
+ * NOTE: animationsUrls is an array — one GLB per clip. See the split-export
+ * rationale in the file-level docstring. Each file's animations[] array is
+ * concatenated into a single clip list handed to the Animation Controller.
  */
 export interface PlayerConfig {
-  /** URL to the GLB containing the rigged mesh + skeleton (no clips). */
+  /** URL to the GLB containing the rigged mesh + skeleton. */
   modelUrl: string;
-  /** URL to the GLB containing the animation clips (no mesh). Dual-GLB pattern. */
-  animationsUrl: string;
+  /**
+   * Array of URLs, each pointing to a single-clip GLB. Meshy's "Single file: off"
+   * export mode produces one GLB per animation. All files share the same skeleton
+   * hierarchy (since they're exported from the same Meshy character), so the
+   * clips bind cleanly to the skeleton loaded from modelUrl.
+   */
+  animationsUrls: string[];
   /** World-space spawn position for the physics body. */
   spawnPosition: { x: number; y: number; z: number };
   /** Maximum HP. Default in JSON: 100. */
@@ -228,6 +238,66 @@ export interface Player {
 // ---------------------------------------------------------------------------
 const _syncPos = new THREE.Vector3();
 
+/**
+ * The root bone name in Meshy's auto-rigged humanoid GLBs. Every clip in
+ * robot_hero_animations.glb animates `Hips.position` (root motion). Three.js
+ * track names follow the `<nodeName>.<property>` convention, so the full track
+ * names are `Hips.position`. We strip these at load time — see stripRootMotion()
+ * below for rationale. If Meshy ever changes its naming convention or we adopt
+ * a different rig, update this constant.
+ */
+const ROOT_BONE_NAME = 'Hips';
+
+/**
+ * Strip root motion (Hips translation) from every animation clip in place.
+ *
+ * THE PROBLEM:
+ * Meshy/Mixamo animations bake hip translation into every clip. During
+ * `Regular_Jump` the Hips bone physically translates upward inside the clip;
+ * during `Walking`/`Running` it drifts forward. In a physics-authored
+ * architecture this fights the Rapier-driven movement:
+ *   - Rapier owns body position (Movement System writes via setLinvel)
+ *   - Clip animates Hips.position internally as it plays
+ *   - onAfterStep then copies body.translation() to mesh.position
+ * Both systems translate the character but at different rates → the mesh
+ * detaches from the capsule and visually warps. The jump is the most obvious
+ * symptom: the mesh bobs above the capsule mid-air, then snaps back when the
+ * clip ends and Hips returns to its rest position.
+ *
+ * THE FIX:
+ * Remove every track whose name ends with `${ROOT_BONE_NAME}.position` from
+ * every clip. Rotation tracks on Hips and all child bone tracks are preserved,
+ * so arms/legs/spine still animate normally. The clip becomes "in-place" —
+ * position is 100% physics-driven, animation is purely cosmetic bone pose.
+ *
+ * WHY ends-with MATCH:
+ * Some GLTFLoader exports prefix bone names with the Armature node (e.g.
+ * `Armature|Hips.position`). endsWith() covers both bare and prefixed variants
+ * without needing to know the exact naming scheme Meshy used.
+ *
+ * WHY HERE (not in animation-controller.ts):
+ * This is a rig-specific preprocessing step. The AnimationController is
+ * generic and should not know about Meshy skeleton conventions. Player System
+ * owns its own rig quirks.
+ *
+ * @param clips - Animation clips from the loaded GLB. Mutated in place.
+ */
+function stripRootMotion(clips: THREE.AnimationClip[]): void {
+  const trackSuffix = `${ROOT_BONE_NAME}.position`;
+  let totalStripped = 0;
+  for (const clip of clips) {
+    const before = clip.tracks.length;
+    clip.tracks = clip.tracks.filter(
+      (track) => !track.name.endsWith(trackSuffix),
+    );
+    totalStripped += before - clip.tracks.length;
+  }
+  console.log(
+    `[Player] Stripped ${totalStripped} ${trackSuffix} tracks from ${clips.length} clips ` +
+    `(in-place animations — physics is authoritative for position)`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -266,12 +336,27 @@ export async function createPlayer(
   id: string,
 ): Promise<Player> {
   // -------------------------------------------------------------------------
-  // Step 1 + 2 — Load mesh GLB and animations GLB in parallel for speed
+  // Step 1 + 2 — Load mesh GLB + all split-export animation GLBs in parallel.
+  //
+  // The mesh GLB provides the scene hierarchy + skeleton. Each animation GLB
+  // provides a SINGLE clip (Meshy's split-export produces one clip per file).
+  // All GLBs share the same skeleton because they come from the same Meshy
+  // character, so the clips bind correctly to the mesh's skeleton root without
+  // any retargeting step.
+  //
+  // Memory note: each animation GLB also contains a full copy of the skinned
+  // mesh (Meshy exports "withSkin" by default). We ignore gltf.scene from the
+  // animation GLBs and only harvest gltf.animations[]. The mesh data is briefly
+  // loaded then eligible for garbage collection once the gltf reference drops.
+  // If memory becomes a concern post-jam, strip meshes from anim GLBs at build
+  // time with gltf-pipeline.
   // -------------------------------------------------------------------------
-  const [modelGLTF, animsGLTF] = await Promise.all([
+  const allLoads = await Promise.all([
     engine.loadGLTF(config.modelUrl),
-    engine.loadGLTF(config.animationsUrl),
+    ...config.animationsUrls.map((url) => engine.loadGLTF(url)),
   ]);
+  const modelGLTF = allLoads[0];
+  const animsGLTFs = allLoads.slice(1);
 
   // -------------------------------------------------------------------------
   // Step 3 — Add mesh to scene at spawn position
@@ -303,9 +388,14 @@ export async function createPlayer(
   // Per Rapier reference docs footgun #4: "No setLinearDamping — bodies slide
   // forever in zero-friction conditions".
   // -------------------------------------------------------------------------
+  // NOTE: Zero linear damping. Space Runner's Movement Controller explicitly
+  // sets velocity every physics tick — damping would fight the controller and
+  // cause micro-stutter (body oscillates between set-velocity and damped-velocity
+  // every frame). The old MML design used 0.5 damping to prevent sliding, but
+  // that's unnecessary when velocity is driven directly.
   const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(sx, sy, sz)
-    .setLinearDamping(0.5);
+    .setLinearDamping(0);
   const body = engine.world.createRigidBody(bodyDesc);
 
   // -------------------------------------------------------------------------
@@ -327,8 +417,52 @@ export async function createPlayer(
   // The skeletons match because both come from the same Meshy auto-rig export.
   // We pass the clips array from animsGLTF — the controller binds them to the
   // mixer created from playerMesh.
+  //
+  // CRITICAL: Strip root motion (Hips.position) from every clip BEFORE creating
+  // the controller. Meshy bakes hip translation into every clip, which fights
+  // our physics-driven movement (see stripRootMotion docstring above for the
+  // full rationale). Without this, Regular_Jump visually detaches the mesh from
+  // the capsule, Walking/Running drift, and all locomotion looks "floaty".
   // -------------------------------------------------------------------------
-  const animationClips = animsGLTF.animations;
+  // Concatenate animations[] from every loaded GLB into a single clip list.
+  // With split-export, each file contributes exactly one clip.
+  const animationClips: THREE.AnimationClip[] = [];
+  for (const g of animsGLTFs) {
+    for (const clip of g.animations) {
+      animationClips.push(clip);
+    }
+  }
+  stripRootMotion(animationClips);
+
+  // -------------------------------------------------------------------------
+  // DIAGNOSTIC: print all clip names + durations + clipMap resolution before
+  // creating the controller. Catches Meshy mislabel issues — when the
+  // user sees the wrong animation play, this log identifies whether the
+  // problem is wrong clip name (resolution failure) vs. wrong clip content
+  // (resolved correctly but the actual data is mislabeled by the exporter).
+  // Remove or downgrade to console.debug after the asset pipeline stabilizes.
+  // -------------------------------------------------------------------------
+  console.log('[Player] === Animation clip diagnostic ===');
+  console.log(`[Player] Loaded ${animationClips.length} clips from ${config.animationsUrls.length} split GLBs`);
+  for (let i = 0; i < config.animationsUrls.length; i++) {
+    const url = config.animationsUrls[i];
+    const clipCount = animsGLTFs[i].animations.length;
+    console.log(`[Player]   ${url} → ${clipCount} clip(s)`);
+  }
+  for (const clip of animationClips) {
+    console.log(`[Player]   "${clip.name}" duration=${clip.duration.toFixed(3)}s tracks=${clip.tracks.length}`);
+  }
+  console.log('[Player] clipMap resolution:');
+  for (const [stateName, clipName] of Object.entries(config.animation.clipMap)) {
+    const found = animationClips.find((c) => c.name === clipName);
+    const status = found
+      ? `→ "${found.name}" (${found.duration.toFixed(3)}s)`
+      : `*** NOT FOUND ***`;
+    console.log(`[Player]   ${stateName.padEnd(8)} → "${clipName}" ${status}`);
+  }
+  console.log(`[Player] initialAnimationState = "${config.initialAnimationState}"`);
+  console.log('[Player] === End animation diagnostic ===');
+
   const anim = createAnimationController(playerMesh, animationClips, config.animation);
 
   // -------------------------------------------------------------------------
@@ -472,18 +606,20 @@ export async function createPlayer(
       // Fire onDamage event with the ORIGINAL amount and current HP
       for (const cb of damageSubscribers) cb(amount, hp);
 
-      // Play hit animation (no-op if 'hit' is not in clipMap)
-      anim.play('hit');
+      // NOTE: Space Runner uses on-touch death (maxHp=1). The 'hit' animation
+      // path was removed in the 2026-04-09 simplification — there is no
+      // intermediate hit-flinch state. takeDamage(>=1) goes straight to
+      // alive → dead via triggerDeath() below.
 
       // Transition on HP reaching 0
       if (hp === 0) {
         if (revivalsRemaining > 0) {
-          // alive → downed: teammates can still revive
+          // alive → downed: kept for API compatibility, but Space Runner
+          // sets revivalsRemaining = 0 at boot so this branch is unreachable
           transitionState('downed');
-          // Play death animation to show the downed pose
           anim.play('death');
         } else {
-          // alive → dead: no revivals left, permanent
+          // alive → dead: terminal
           triggerDeath();
         }
       }
@@ -514,8 +650,9 @@ export async function createPlayer(
       // Notify revive subscribers
       for (const cb of reviveSubscribers) cb(reviverId);
 
-      // Return to idle animation from revive
-      anim.play('idle');
+      // Return to the default running state on revive (Space Runner has no
+      // idle during gameplay — Movement immediately overrides anyway)
+      anim.play('sprint');
 
       return true;
     },

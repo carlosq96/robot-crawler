@@ -83,6 +83,63 @@ export interface AnimationControllerConfig {
   defaultCrossfade: number;
   /** Per-state crossfade overrides (take priority over defaultCrossfade). */
   crossfadeOverrides?: Record<string, number>;
+  /**
+   * Per-state start-time offsets as a normalized fraction of clip duration (0..1).
+   * When play(state) is called, the action's time cursor is set to
+   * `clip.duration * startOffsets[state]` instead of 0. Missing entries default to 0
+   * (play from the beginning).
+   *
+   * Use case: Meshy/Mixamo action clips often include several hundred milliseconds
+   * of anticipation (e.g. a pre-jump crouch) baked at the start of the clip. When
+   * the gameplay system drives motion via physics — applying an instant velocity
+   * impulse on jump — the anticipation plays AFTER the character is already moving,
+   * producing an obviously-wrong "wind up while airborne" effect. The fix is to
+   * skip past the anticipation frames by starting the clip partway through.
+   *
+   * Values are normalized (0..1) rather than seconds so clip swaps don't require
+   * retuning: a jump clip of any length can be trimmed to its "launch" moment at
+   * roughly the same fraction.
+   *
+   * @example
+   * ```json
+   * { "jump": 0.15 }  // skip the first 15% of the jump clip (the anticipation)
+   * ```
+   */
+  startOffsets?: Record<string, number>;
+  /**
+   * States listed here stay clamped at their last frame when the clip finishes,
+   * instead of auto-returning to `returnState`. The gameplay system that triggered
+   * the state is responsible for explicitly calling `play(nextState)` when the
+   * appropriate condition is met (e.g. movement detects landing after a jump).
+   *
+   * Use case: jump clips that are shorter than the actual airborne time. Without
+   * holdOnFinish, the clip ends mid-air and the character snaps back to the run
+   * loop while still falling. With holdOnFinish, the character holds the last
+   * frame (typically an extended/falling pose) until landing triggers sprint.
+   *
+   * @example
+   * ```json
+   * ["jump"]  // jump clip holds last frame; movement.ts plays 'sprint' on landing
+   * ```
+   */
+  holdOnFinish?: string[];
+  /**
+   * Per-state playback time scale. Values >1 play the clip faster, <1 play slower.
+   * Applied once at controller creation via `action.setEffectiveTimeScale(n)`,
+   * so the scale persists across every play() of that state.
+   *
+   * Use case: Meshy clips with a fixed duration that visually want to be faster
+   * (e.g. a "Running" clip authored at a jogging pace that the game needs to
+   * read as a sprint). Rather than regenerating the asset, scale its playback.
+   *
+   * Values outside 0.1..4.0 are clamped. Missing entries default to 1.0 (no scale).
+   *
+   * @example
+   * ```json
+   * { "sprint": 1.5 }  // play the sprint clip 50% faster
+   * ```
+   */
+  timeScales?: Record<string, number>;
   /** Animation events to fire at normalized timestamps within specific states. */
   events?: AnimationEventDef[];
 }
@@ -298,6 +355,15 @@ export function createAnimationController(
       action.clampWhenFinished = true;
     }
 
+    // Apply per-state time scale (clamped to sane range to prevent accidents
+    // like negative scales reversing the clip, or extreme scales producing
+    // unreadable motion). Default 1.0 when no entry exists.
+    const rawTimeScale = config.timeScales?.[stateName] ?? 1.0;
+    const clampedTimeScale = Math.max(0.1, Math.min(rawTimeScale, 4.0));
+    if (clampedTimeScale !== 1.0) {
+      action.setEffectiveTimeScale(clampedTimeScale);
+    }
+
     actionMap.set(stateName, action);
   }
 
@@ -341,6 +407,9 @@ export function createAnimationController(
   //   - "hit" state → return to previousState (the state before hit was played)
   //   - any other one-shot → return to config.returnState
   // -------------------------------------------------------------------------
+  // Build a fast lookup set for holdOnFinish states
+  const holdOnFinishSet = new Set<string>(config.holdOnFinish ?? []);
+
   const onMixerFinished = (e: MixerFinishedEvent): void => {
     if (disposed) return;
 
@@ -349,6 +418,13 @@ export function createAnimationController(
 
     const finishedAction = actionMap.get(finishedState);
     if (finishedAction !== e.action) return; // some other action finished, ignore
+
+    // holdOnFinish: if this state is listed, stay clamped at the last frame.
+    // The gameplay system (e.g. movement.ts) is responsible for calling
+    // play(nextState) when appropriate (e.g. on landing after a jump).
+    if (holdOnFinishSet.has(finishedState)) {
+      return; // clip stays clamped; currentState stays as-is
+    }
 
     // Determine return target
     let targetState: string;
@@ -402,8 +478,37 @@ export function createAnimationController(
     const newAction = actionMap.get(state)!;
     const previousAction = currentState !== null ? actionMap.get(currentState) : null;
 
-    // Reset and play the new action
-    newAction.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).play();
+    // Preserve the per-state time scale (set once at init from config.timeScales).
+    // action.reset() wipes the time scale back to 1, so we capture it before
+    // reset and restore after. Without this, setting timeScales["sprint"]=1.5
+    // would only affect the FIRST play; every subsequent play would snap back
+    // to 1.0 because play() does reset() internally.
+    const preservedTimeScale = newAction.getEffectiveTimeScale();
+    newAction.reset().setEffectiveWeight(1).setEffectiveTimeScale(preservedTimeScale).play();
+
+    // Apply per-state start-time offset (skip anticipation frames, etc.).
+    // See AnimationControllerConfig.startOffsets docstring for the rationale.
+    // The offset is a normalized [0..1) fraction of clip duration, multiplied by
+    // the clip's total duration to get seconds. action.reset() above sets time=0,
+    // so we overwrite it here AFTER reset.
+    //
+    // Clamp into [0, 1) — we subtract a small epsilon from 1 so we never start
+    // at the exact end of a one-shot clip (which would make the 'finished' event
+    // fire immediately and cause an infinite loop for states that return to self).
+    // 0 means "no offset" which short-circuits to avoid the tiny float math cost.
+    const rawOffset = config.startOffsets?.[state] ?? 0;
+    if (rawOffset > 0) {
+      const clipDuration = newAction.getClip().duration;
+      const clamped = Math.max(0, Math.min(rawOffset, 0.9999));
+      newAction.time = clipDuration * clamped;
+      // Update the lastNormalizedTime so event polling does not re-fire events
+      // that live before the offset (a jump event at t=0.05 should not fire when
+      // we start at t=0.15).
+      lastNormalizedTime.set(state, clamped);
+    } else {
+      // Reset normalized time tracking for the new state so events fire correctly
+      lastNormalizedTime.set(state, 0);
+    }
 
     // Crossfade from previous to new
     if (previousAction !== undefined && previousAction !== null) {
@@ -413,9 +518,6 @@ export function createAnimationController(
     // Update state tracking — save previous before overwriting current
     previousState = currentState;
     currentState = state;
-
-    // Reset normalized time tracking for the new state so events fire correctly
-    lastNormalizedTime.set(state, 0);
   }
 
   // -------------------------------------------------------------------------

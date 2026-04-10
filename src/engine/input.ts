@@ -95,6 +95,8 @@ export type ActionName =
   | 'moveLeft'
   | 'moveRight'
   | 'jump'
+  | 'slide'
+  | 'attack'
   | 'shoot'
   | 'chargeStart'
   | 'chargeRelease'
@@ -254,6 +256,8 @@ export async function init(canvas: HTMLCanvasElement): Promise<InputManager> {
     moveLeft:      { type: 'key',         code: 'KeyA' },
     moveRight:     { type: 'key',         code: 'KeyD' },
     jump:          { type: 'key',         code: 'Space' },
+    slide:         { type: 'key',         code: 'ShiftLeft' },
+    attack:        { type: 'mouseButton', button: 0 },
     shoot:         { type: 'mouseButton', button: 0 },
     chargeStart:   { type: 'mouseButton', button: 0 },
     chargeRelease: { type: 'mouseButton', button: 0 },
@@ -384,7 +388,8 @@ export async function init(canvas: HTMLCanvasElement): Promise<InputManager> {
   // Initialize maps for all actions
   const ALL_ACTIONS: ActionName[] = [
     'moveForward', 'moveBack', 'moveLeft', 'moveRight',
-    'jump', 'shoot', 'chargeStart', 'chargeRelease',
+    'jump', 'slide', 'attack',
+    'shoot', 'chargeStart', 'chargeRelease',
     'subWeapon', 'aimX', 'aimY',
     'interact', 'pause', 'confirm', 'cancel',
   ];

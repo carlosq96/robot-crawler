@@ -1,9 +1,8 @@
 {
   "offsetX": 0,
-  "offsetY": 2.5,
-  "offsetZ": -4,
-  "lookAtOffsetY": 1.5,
-  "followLerpFactor": 0.08,
-  "lookLerpFactor": 0.05
+  "offsetY": 4,
+  "offsetZ": 6,
+  "lookAtOffsetY": 1.2,
+  "followLerpFactor": 0.15,
+  "lookLerpFactor": 0.2
 }
-

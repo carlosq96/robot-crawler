@@ -1,16 +1,20 @@
 /**
  * @file src/gameplay/movement.ts
- * @description Movement Controller — bridges Input Manager and the player's Rapier body.
- * Reads WASD + mouse input, computes camera-relative velocity, applies it to the
- * player capsule, handles grounded detection and jumping, and drives locomotion
- * animation state transitions on the player's AnimationController.
+ * @description Movement Controller (Space Runner rework) — bridges Input Manager
+ * and the player's Rapier body. Applies a CONSTANT forward velocity (auto-run),
+ * smoothed lateral dodge (A/D), edge-triggered jump, and a timed slide state with
+ * a forward speed boost.
  *
- * Also accumulates the player's aim direction (yaw + pitch from mouse) so that
- * Buster Combat's lock-on can call getAimDirection() to bias target selection.
+ * Unlike the MML predecessor, this version:
+ *   - Ignores the camera (forward is a fixed world axis, -Z)
+ *   - Never accumulates mouse aim (no aim, no free-look, no combat lock-on)
+ *   - Never rotates the player body (angular DOF fully locked by main.ts)
+ *   - Treats "forward" as always-on — there is no W/S input
+ *   - Adds a timed slide behavioural state
  *
- * Intentionally narrow scope: Movement does NOT own the player body (Player System
- * does), does NOT own input (Input Manager does), and does NOT shoot anything
- * (Buster Combat does).
+ * Intentionally narrow scope: Movement does NOT own the player body
+ * (Player System does), does NOT own input (Input Manager does), and does NOT
+ * shoot anything (Super-Suit Combat will, when it ships).
  *
  * Design spec: design/quick-specs/movement-2026-04-09.md
  *
@@ -20,9 +24,9 @@
  *   ADR-0008  TypeScript everywhere — .js extensions on local imports; strict mode.
  *
  * Performance contract:
- *   ZERO heap allocations inside update() — all Vector3 temps are pre-allocated at
- *   module scope and reused every call. Per technical-preferences.md forbidden pattern:
- *   "no `new Vector3()` in animation loop".
+ *   ZERO heap allocations inside update() — no Vector3 temps needed because we
+ *   work with scalar x/y/z components directly on the Rapier linvel object.
+ *   Per technical-preferences.md: "no `new Vector3()` in animation loop".
  *
  * @example
  * ```ts
@@ -35,34 +39,10 @@
  * ```
  */
 
-import * as THREE from 'three';
 import * as RAPIER from '@dimforge/rapier3d-compat';
 import type { EngineHandle } from '../engine/bootstrap.js';
 import type { InputManager } from '../engine/input.js';
 import type { Player } from './player.js';
-
-// ---------------------------------------------------------------------------
-// Module-scope reusable Vector3 temps — ZERO allocations per update() call.
-// Pre-allocated here (not inside the factory closure or inside update) so they
-// are shared across all MovementController instances.
-// Sequential update() calls are safe because update() is not re-entrant.
-// Per technical-preferences.md: "no `new Vector3()` in animation loop".
-// ---------------------------------------------------------------------------
-
-/** Camera's world-space forward direction, projected onto the horizontal plane. */
-const _camForward = new THREE.Vector3();
-
-/** Camera's world-space right direction (perpendicular to _camForward). */
-const _camRight = new THREE.Vector3();
-
-/** Desired horizontal velocity this tick, derived from WASD + camera directions. */
-const _desiredVel = new THREE.Vector3();
-
-/** Current horizontal velocity read from the Rapier body each tick. */
-const _currentHorizVel = new THREE.Vector3();
-
-/** World up constant — used for the cross-product that derives _camRight. */
-const _worldUp = new THREE.Vector3(0, 1, 0);
 
 // ---------------------------------------------------------------------------
 // Public API types — LOCKED contract (per spec "Public API Surface" section)
@@ -75,29 +55,22 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
  * Tuning ranges and rationale documented in design/quick-specs/movement-2026-04-09.md.
  */
 export interface MovementConfig {
-  /** Maximum horizontal movement speed in m/s. Default: 5.0. */
-  walkSpeed: number;
-  /** Velocity lerp rate (1/sec) when input is active. Higher = snappier. Default: 15.0. */
-  acceleration: number;
-  /** Velocity lerp rate (1/sec) when no input. Slightly higher than accel for clean stops. Default: 20.0. */
-  deceleration: number;
-  /** Upward m/s impulse applied when jump is triggered. Default: 6.0. */
+  /** Constant forward speed in m/s along world -Z. Default: 12.0. */
+  forwardSpeed: number;
+  /** Maximum lateral dodge speed in m/s along world ±X. Default: 7.0. */
+  lateralSpeed: number;
+  /** Lateral velocity lerp rate (1/sec). Higher = snappier dodge. Default: 25.0. */
+  lateralAcceleration: number;
+  /** Upward m/s impulse applied when jump is triggered. Default: 6.5. */
   jumpVelocity: number;
-  /** 0..1 multiplier on horizontal control while airborne. Prevents floaty mid-air corrections. Default: 0.4. */
+  /** 0..1 multiplier on lateral control while airborne. Default: 0.6. */
   airControl: number;
+  /** Seconds a slide state lasts after activation. Default: 0.6. */
+  slideDuration: number;
+  /** Extra forward m/s applied during the slide window. Default: 4.0. */
+  slideSpeedBoost: number;
   /** Distance in meters below the capsule bottom to cast the ground-check ray. Default: 0.15. */
   groundCheckDistance: number;
-  /** Radians of yaw rotation per pixel of mouse X delta. Default: 0.003. */
-  yawSensitivity: number;
-  /** Radians of pitch rotation per pixel of mouse Y delta. Default: 0.003. */
-  pitchSensitivity: number;
-  /** Maximum up/down look angle in degrees. Below 90 to avoid camera gimbal flip. Default: 60. */
-  pitchClampDegrees: number;
-  /**
-   * Maximum player body rotation rate in radians per second when turning to face
-   * movement direction. ~10 rad/sec ≈ 180° in 0.31s. Default: 10.0.
-   */
-  turnRadPerSec: number;
 }
 
 /**
@@ -109,13 +82,13 @@ export interface MovementConfig {
  * ```ts
  * const movement = createMovementController(engine, player, input, cfg);
  *
- * // Query aim direction for Buster Combat lock-on bias:
- * const dir = movement.getAimDirection();
+ * // Query slide state for HUD cooldown indicator:
+ * if (movement.isSliding()) hud.showSlideBar();
  *
  * // Disable during cutscene or UI modal:
  * movement.setEnabled(false);
  *
- * // Clean up on room exit:
+ * // Clean up on run end:
  * movement.dispose();
  * ```
  */
@@ -130,14 +103,10 @@ export interface MovementController {
   update(fixedDt: number): void;
 
   /**
-   * Returns the current aim direction as a normalized world-space unit vector.
-   * Derived from the accumulated yaw + pitch since controller creation.
-   * Intended for Buster Combat lock-on bias. Does NOT recompute on every call —
-   * the result is cached and updated in update().
-   *
-   * @returns Normalized THREE.Vector3 in world space.
+   * Returns true if the player is currently in the slide state.
+   * Read by HUD (cooldown indicator) and future Super-Suit Combat (lockout).
    */
-  getAimDirection(): THREE.Vector3;
+  isSliding(): boolean;
 
   /**
    * Enable or disable all input processing. When disabled, horizontal velocity is
@@ -164,8 +133,8 @@ export interface MovementController {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a Movement Controller that drives the player's Rapier body via WASD
- * input and camera-relative directions.
+ * Create a Movement Controller that drives the player's Rapier body via auto-run,
+ * lateral dodge, jump, and slide.
  *
  * The factory registers `engine.onBeforeStep(...)` internally so the velocity
  * it computes is applied before `world.step()` in the same physics tick.
@@ -173,7 +142,7 @@ export interface MovementController {
  *
  * @param engine - The engine handle from bootstrap.init().
  * @param player - The Player entity whose body and anim this controller drives.
- * @param input  - The Input Manager providing WASD + mouse delta.
+ * @param input  - The Input Manager providing moveLeft/moveRight/jump/slide actions.
  * @param config - Movement tuning values, loaded from assets/data/movement.json.
  * @returns A fully initialized MovementController.
  *
@@ -194,19 +163,6 @@ export function createMovementController(
   // Internal state (per-controller, not shared)
   // -------------------------------------------------------------------------
 
-  /** Accumulated horizontal camera rotation in radians. */
-  let yawAccumulator: number = 0;
-
-  /** Accumulated vertical camera rotation in radians. Clamped to ±pitchLimit. */
-  let pitchAccumulator: number = 0;
-
-  /**
-   * Cached aim direction — updated each tick in update(), returned by
-   * getAimDirection(). Stored as a persistent Vector3 so callers may hold a
-   * reference (it is NOT a module temp — it carries state across frames).
-   */
-  const aimDir = new THREE.Vector3(0, 0, 1);
-
   /** Whether input processing is enabled. */
   let enabled: boolean = true;
 
@@ -221,11 +177,24 @@ export function createMovementController(
   let jumpRequested: boolean = false;
 
   /**
+   * Edge-triggered slide request. Set to true on slide key press. Consumed each
+   * update; only converts into an active slide if grounded AND not already sliding.
+   */
+  let slideRequested: boolean = false;
+
+  /**
+   * Seconds remaining in the current slide state. 0 means not sliding.
+   * Decremented by fixedDt each tick; when it reaches 0, the slide ends and
+   * the animation returns to `run`.
+   */
+  let slideTimeRemaining: number = 0;
+
+  /**
    * Window-lockout flag that prevents a double-jump from the ground-check ray
    * reporting "grounded" for 1-2 ticks after the jump impulse is applied
    * (because the ray's 0.15m length still hits the floor while the body rises
    * through the first few centimeters of liftoff). Set to true when a jump
-   * fires, cleared when isGrounded becomes false (the body is fully airborne).
+   * fires; cleared when the upward velocity decays to zero (peak of arc).
    */
   let justJumpedInGroundWindow: boolean = false;
 
@@ -235,32 +204,23 @@ export function createMovementController(
     jumpRequested = true;
   });
 
+  // Subscribe to the slide action's rising edge.
+  const unsubSlidePressed = input.onActionPressed('slide', (): void => {
+    slideRequested = true;
+  });
+
   // -------------------------------------------------------------------------
   // Capsule bottom offset
   //
   // The ground-check ray originates from below the body's center of mass.
-  // We need to cast from the capsule's lowest point, which is at:
-  //   body.translation().y - capsuleHalfHeight
-  //
-  // The capsule dimensions come from player.json (capsuleHeight: 1.0,
-  // capsuleRadius: 0.4). capsuleHalfHeight = capsuleHeight / 2 = 0.5.
-  // Total capsule height = capsuleHeight + 2*capsuleRadius = 1.8m.
-  // The body's center is at the geometric center of the capsule (y of body
-  // translation = center), so the capsule BOTTOM = center - 0.9.
-  //
-  // We use 0.9 as a named constant rather than coupling to player config values
-  // at runtime. This is a pragmatic jam trade-off — documented here and in the
-  // spec (section 3 "Grounded check + jump").
+  // Capsule dimensions come from player.json (capsuleHeight: 1.0,
+  // capsuleRadius: 0.4). Center-to-bottom = capsuleHeight/2 + capsuleRadius
+  // = 0.5 + 0.4 = 0.9.
   //
   // If player capsule dimensions change in player.json, this constant must be
-  // updated to match: capsuleHeight/2 + capsuleRadius = 0.5 + 0.4 = 0.9.
+  // updated to match.
   // -------------------------------------------------------------------------
   const CAPSULE_BOTTOM_OFFSET = 0.9; // meters below body center to capsule bottom
-
-  // -------------------------------------------------------------------------
-  // Pitch clamp (derived from config, computed once)
-  // -------------------------------------------------------------------------
-  const pitchLimit = config.pitchClampDegrees * (Math.PI / 180);
 
   // -------------------------------------------------------------------------
   // Fixed timestep constant (matches engine bootstrap ADR-0007 FIXED_TIMESTEP)
@@ -277,62 +237,26 @@ export function createMovementController(
     if (disposed) return;
 
     // -----------------------------------------------------------------------
-    // Spec section 6 — Disable when player is downed/dead
-    // Freeze horizontal velocity to prevent sliding on slopes, skip input.
+    // Disable-state gates — freeze horizontal velocity and skip processing
+    // when the player is downed/dead/disabled. Preserves Y so gravity works.
     // -----------------------------------------------------------------------
-    if (player.getState() !== 'alive') {
+    if (player.getState() !== 'alive' || !enabled) {
       const linvel = player.body.linvel();
       player.body.setLinvel({ x: 0, y: linvel.y, z: 0 }, true);
+      // Clear any pending slide state so we don't resume sliding after enable.
+      slideTimeRemaining = 0;
+      jumpRequested = false;
+      slideRequested = false;
       return;
     }
 
     // -----------------------------------------------------------------------
-    // Explicit setEnabled(false) gate — same freeze behavior as downed state
-    // -----------------------------------------------------------------------
-    if (!enabled) {
-      const linvel = player.body.linvel();
-      player.body.setLinvel({ x: 0, y: linvel.y, z: 0 }, true);
-      return;
-    }
-
-    // -----------------------------------------------------------------------
-    // Spec section 4 — Aim direction accumulation from mouse delta
+    // Ground check — raycast straight down from the capsule bottom.
     //
-    // consumeMouseDelta() returns the accumulated delta since the last call and
-    // resets the accumulator. Must be called once per fixed tick.
-    // Input Manager already applies its own sensitivity scale from input.json;
-    // we apply the additional movement-specific yaw/pitch sensitivity on top.
-    // -----------------------------------------------------------------------
-    const { dx, dy } = input.consumeMouseDelta();
-
-    yawAccumulator -= dx * config.yawSensitivity;
-    pitchAccumulator = Math.max(
-      -pitchLimit,
-      Math.min(pitchLimit, pitchAccumulator - dy * config.pitchSensitivity),
-    );
-
-    // Recompute and cache the aim direction unit vector
-    // (spherical → Cartesian: yaw around Y, pitch up/down)
-    aimDir.set(
-      Math.sin(yawAccumulator) * Math.cos(pitchAccumulator),
-      Math.sin(pitchAccumulator),
-      Math.cos(yawAccumulator) * Math.cos(pitchAccumulator),
-    );
-    // aimDir is already unit length by construction (trig identity: sin²+cos²=1)
-
-    // -----------------------------------------------------------------------
-    // Spec section 3 — Ground check
-    //
-    // Cast a ray straight down from the capsule bottom. `solid: true` means the
-    // ray starts inside a solid shape and reports a hit at distance 0 — but we
-    // start the ray below the player collider so the player's own collider is
-    // not hit (the ray origin is at the capsule bottom, outside the capsule).
-    //
-    // We do NOT need to filter the player's own collider because the ray origin
-    // is placed at the very bottom of the capsule and Rapier's Ray start is
-    // treated as a point, not a sphere. The `solid: true` flag mainly matters
-    // when starting a ray inside geometry; starting at the capsule edge means
-    // the player's own collider is behind the ray origin, not in front of it.
+    // The ray origin is placed at the very bottom of the capsule (outside the
+    // collider) so the player's own collider is not hit. `solid: true` mainly
+    // matters when starting a ray inside geometry; starting at the capsule
+    // edge means the player's own collider is behind the ray origin.
     // -----------------------------------------------------------------------
     const pos = player.body.translation();
     const rayOriginY = pos.y - CAPSULE_BOTTOM_OFFSET;
@@ -346,28 +270,25 @@ export function createMovementController(
     const isGrounded = groundHit !== null;
 
     // -----------------------------------------------------------------------
-    // Spec section 3 — Jump (edge-triggered, velocity-gated lockout)
+    // Jump (edge-triggered, ground-window lockout)
     //
     // jumpRequested is set by the onActionPressed('jump') subscriber (exactly
-    // once per key press — holding space does not retrigger).
+    // once per key press). justJumpedInGroundWindow prevents double-jumps in
+    // the 1-2 ticks after liftoff when the ground raycast still reports
+    // grounded. Cleared when upward velocity decays (peak of arc).
     //
-    // justJumpedInGroundWindow prevents double-jumps in the 1-2 ticks after
-    // liftoff when the ground-check ray still reports isGrounded=true because
-    // the ray is 0.15m long and the body only rises ~0.1m per tick at
-    // jumpVelocity=6. Instead of clearing on airborne (which is fragile — the
-    // ray can flicker on/off during takeoff), we clear when the upward velocity
-    // decays to zero (body peaks or starts falling). By that time the body is
-    // clearly past the ground-check window.
-    //
-    // The jump animation is triggered here as a one-shot ('jump' clip). The
-    // walk/idle transition block below skips while currentAnimState === 'jump'
-    // so the one-shot plays cleanly until the Animation Controller's finished
-    // event returns state to 'idle'.
+    // The jump animation is triggered here as a one-shot. The anim transition
+    // block below skips while currentAnimState === 'jump' so the one-shot
+    // plays cleanly until the Animation Controller's finished event returns
+    // state to 'idle'/'run'.
     // -----------------------------------------------------------------------
     const linvelForJump = player.body.linvel();
 
     if (jumpRequested && isGrounded && !justJumpedInGroundWindow) {
-      player.body.setLinvel({ x: linvelForJump.x, y: config.jumpVelocity, z: linvelForJump.z }, true);
+      player.body.setLinvel(
+        { x: linvelForJump.x, y: config.jumpVelocity, z: linvelForJump.z },
+        true,
+      );
       player.anim.play('jump');
       justJumpedInGroundWindow = true;
     }
@@ -375,183 +296,126 @@ export function createMovementController(
     // of whether it was applied. Prevents stale requests from accumulating.
     jumpRequested = false;
 
-    // Clear the lockout when the upward impulse is spent. At peak of arc
-    // (linvel.y ≤ 0) we know the body has passed the ground-check window, and
-    // the next isGrounded transition will be a genuine landing.
+    // Clear the lockout when the upward impulse is spent.
     if (justJumpedInGroundWindow && linvelForJump.y <= 0.01) {
       justJumpedInGroundWindow = false;
     }
 
     // -----------------------------------------------------------------------
-    // Spec section 1 — Camera-relative movement direction
+    // Slide (edge-triggered, timed state)
     //
-    // Get the camera's current world-space forward direction, project onto the
-    // horizontal plane (zero Y), normalize. Then derive right via cross product.
-    // Using getWorldDirection() + zero Y is more robust than reading camera.right
-    // because the camera may be pitched and camera.right would tilt with it.
+    // Only activate if grounded and not already sliding. Consumes the request
+    // regardless (prevents a stale request from triggering mid-air later).
     // -----------------------------------------------------------------------
-    engine.camera.getWorldDirection(_camForward);
-    _camForward.y = 0;
+    if (slideRequested && isGrounded && !justJumpedInGroundWindow && slideTimeRemaining <= 0) {
+      slideTimeRemaining = config.slideDuration;
+      player.anim.play('slide');
+    }
+    slideRequested = false;
 
-    // Guard: if camera is pointing straight up/down, _camForward would be zero.
-    // In that degenerate case, fall back to (0,0,-1) to avoid NaN from normalize.
-    if (_camForward.lengthSq() < 1e-6) {
-      _camForward.set(0, 0, -1);
-    } else {
-      _camForward.normalize();
+    const isSlidingNow = slideTimeRemaining > 0;
+
+    // Tick down slide timer after the activation check so a freshly-started
+    // slide still gets a full duration window.
+    if (isSlidingNow) {
+      slideTimeRemaining -= fixedDt;
     }
 
-    // Right vector: forward × up (then normalize — cross of two unit vectors is
-    // nearly unit, but normalize ensures no floating-point drift accumulation)
-    _camRight.crossVectors(_camForward, _worldUp).normalize();
+    // -----------------------------------------------------------------------
+    // Forward velocity — ALWAYS ON (auto-run)
+    //
+    // Forward is world -Z. Slide adds an additional forward speed boost.
+    // No smoothing on forward — the player is always at full run speed.
+    // -----------------------------------------------------------------------
+    const desiredForwardZ = -config.forwardSpeed + (isSlidingNow ? -config.slideSpeedBoost : 0);
 
     // -----------------------------------------------------------------------
-    // Spec section 1 — Desired velocity computation
+    // Lateral velocity — smoothed toward dodge target
     //
-    // forwardAxis = (W held ? 1 : 0) - (S held ? 1 : 0)  → -1, 0, or +1
-    // rightAxis   = (D held ? 1 : 0) - (A held ? 1 : 0)  → -1, 0, or +1
-    // desiredDir  = forward*forwardAxis + right*rightAxis
+    // lateralAxis = (D held ? 1 : 0) - (A held ? 1 : 0)  → -1, 0, or +1
+    // desiredLateralX = lateralAxis * lateralSpeed
     //
-    // Normalize if magnitude > 0 to prevent diagonal speed boost (diagonal
-    // would otherwise have magnitude √2 ≈ 1.41).
-    // -----------------------------------------------------------------------
-    const forwardAxis = (input.isActionDown('moveForward') ? 1 : 0) - (input.isActionDown('moveBack') ? 1 : 0);
-    const rightAxis   = (input.isActionDown('moveRight') ? 1 : 0)   - (input.isActionDown('moveLeft') ? 1 : 0);
-
-    _desiredVel.set(
-      _camForward.x * forwardAxis + _camRight.x * rightAxis,
-      0,
-      _camForward.z * forwardAxis + _camRight.z * rightAxis,
-    );
-
-    const isInputActive = _desiredVel.lengthSq() > 0;
-
-    if (isInputActive) {
-      _desiredVel.normalize().multiplyScalar(config.walkSpeed);
-    }
-    // When no input: _desiredVel is already (0,0,0) — decelerate toward zero
-
-    // -----------------------------------------------------------------------
-    // Spec section 2 — Velocity smoothing (exponential decay, rate-based)
-    //
-    // `acceleration` and `deceleration` are rate constants in 1/sec (time to
-    // reach ~63% of target). The correct frame-rate-independent formula for a
-    // rate-based exponential approach is:
-    //
+    // Lerp with rate-based exponential:
     //   alpha = 1 - Math.exp(-rate * dt)
     //
-    // At rate=15, dt=1/60: alpha ≈ 0.22 per tick (smooth, not snappy)
-    // At rate=20, dt=1/60: alpha ≈ 0.28 per tick
-    //
-    // While airborne, scale the rate by airControl so the player can nudge
-    // direction mid-jump but not fully redirect instantly.
-    //
-    // NOTE: An earlier version used `1 - Math.pow(1 - rate, dt * 60)` which
-    // worked for Camera Rig (where factor is 0..1) but broke here because
-    // acceleration=15 made the base negative, making alpha ≈ 1.0 every tick
-    // (instant snap) and causing diagonal-movement stutter.
+    // Airborne control is scaled by airControl for weight.
     // -----------------------------------------------------------------------
-    const baseRate = isInputActive ? config.acceleration : config.deceleration;
-    const lerpRate = isGrounded ? baseRate : baseRate * config.airControl;
+    const lateralAxis =
+      (input.isActionDown('moveRight') ? 1 : 0) - (input.isActionDown('moveLeft') ? 1 : 0);
+    const desiredLateralX = lateralAxis * config.lateralSpeed;
+
+    const lerpRate = isGrounded
+      ? config.lateralAcceleration
+      : config.lateralAcceleration * config.airControl;
     const alpha = 1 - Math.exp(-lerpRate * fixedDt);
 
     const linvel = player.body.linvel();
-    _currentHorizVel.set(linvel.x, 0, linvel.z);
-    _currentHorizVel.lerp(_desiredVel, alpha);
+    const newLateralX = linvel.x + (desiredLateralX - linvel.x) * alpha;
 
-    // Write back: only overwrite X and Z. Y (gravity / jump velocity) is preserved.
+    // Write back: X (smoothed lateral), Y (preserved for gravity/jump), Z (direct forward)
     player.body.setLinvel(
-      { x: _currentHorizVel.x, y: linvel.y, z: _currentHorizVel.z },
+      { x: newLateralX, y: linvel.y, z: desiredForwardZ },
       true,
     );
 
     // -----------------------------------------------------------------------
-    // Face movement direction
+    // Animation state transitions
     //
-    // Rather than maintaining separate strafe animations, the player body
-    // rotates to face its velocity direction. The walk animation always plays
-    // "forward," and the rotation sells the direction change. Only X/Z angular
-    // DOF are locked at spawn (main.ts); Y is enabled so this setRotation()
-    // has effect.
+    // The jump clip is shorter than the actual airborne time (~0.5-0.9s clip
+    // vs ~1.3s airborne). With holdOnFinish: ["jump"] in the Animation
+    // Controller config, the jump clip clamps at its last frame when
+    // finished and does NOT auto-return to sprint. Movement owns the
+    // jump→sprint transition: it fires when the player actually lands
+    // (isGrounded transitions from false → true while anim state is 'jump').
     //
-    // We use isInputActive (input keys held) rather than horizSpeedSq so the
-    // player doesn't slowly drift rotation during deceleration after keys are
-    // released. The unit direction comes from _desiredVel (normalized then
-    // scaled by walkSpeed — atan2 is scale-invariant so the walkSpeed factor
-    // does not matter).
+    // Priority (first match wins):
+    //   1. death → skip entirely (terminal)
+    //   2. attack → skip (one-shot with auto-return, not physics-gated)
+    //   3. In 'jump' state AND still airborne → hold (clip is clamped at
+    //      last frame via holdOnFinish; do nothing)
+    //   4. In 'jump' state AND just landed → play 'sprint' (the landing)
+    //   5. Sliding → play 'slide' (if not already)
+    //   6. Otherwise → play 'sprint' (if not already)
     //
-    // targetYaw = atan2(velX, velZ) — derivation:
-    //   The model at yaw=0 faces +Z (verified by the initial 180° flip we
-    //   applied to face -Z). Rotation around Y by angle Y takes +Z → (sinY,0,cosY).
-    //   Setting (sinY, cosY) = (velX/|v|, velZ/|v|) gives Y = atan2(velX, velZ).
-    // -----------------------------------------------------------------------
-    if (isInputActive) {
-      const targetYaw = Math.atan2(_desiredVel.x, _desiredVel.z);
-      const currentRot = player.body.rotation();
-      // Extract yaw from quaternion (rotation around Y axis):
-      //   yaw = atan2(2(wy + xz), 1 - 2(y² + x²))
-      const currentYaw = Math.atan2(
-        2 * (currentRot.w * currentRot.y + currentRot.x * currentRot.z),
-        1 - 2 * (currentRot.y * currentRot.y + currentRot.x * currentRot.x),
-      );
-
-      // Shortest-path angle delta in (-π, π]
-      let deltaYaw = targetYaw - currentYaw;
-      while (deltaYaw > Math.PI) deltaYaw -= 2 * Math.PI;
-      while (deltaYaw < -Math.PI) deltaYaw += 2 * Math.PI;
-
-      // Clamp the applied delta to the max turn rate
-      const maxDelta = config.turnRadPerSec * fixedDt;
-      const appliedDelta = Math.max(-maxDelta, Math.min(maxDelta, deltaYaw));
-      const newYaw = currentYaw + appliedDelta;
-
-      // Write back as a Y-axis quaternion: (0, sin(Y/2), 0, cos(Y/2))
-      const halfYaw = newYaw / 2;
-      player.body.setRotation(
-        { x: 0, y: Math.sin(halfYaw), z: 0, w: Math.cos(halfYaw) },
-        true,
-      );
-    }
-
-    // -----------------------------------------------------------------------
-    // Spec section 5 — Animation state transitions
-    //
-    // Threshold 0.1 m/s² (horizontal speed) to distinguish moving from stopped.
-    // We check getCurrentState() before calling play() to avoid redundant
-    // crossfade triggers on every tick.
-    //
-    // IMPORTANT: skip walk/idle transitions if the current state is 'jump' or
-    // 'hit' — those are one-shot animations. The Animation Controller returns
-    // to 'idle' automatically when they finish. Without this guard, the next
-    // tick after play('jump') would see currentState='jump' !== 'walk' and
-    // immediately override the jump animation with walk/idle, making the jump
-    // anim visually invisible.
+    // `idle` is unreachable during active gameplay because forward is always
+    // on. It only plays when the player is not alive (handled by the
+    // disable-state gate at the top of update()).
     // -----------------------------------------------------------------------
     const currentAnimState = player.anim.getCurrentState();
-    const isOneShotActive = currentAnimState === 'jump' || currentAnimState === 'hit';
 
-    if (isGrounded && !isOneShotActive) {
-      const horizSpeedSq = _currentHorizVel.x * _currentHorizVel.x + _currentHorizVel.z * _currentHorizVel.z;
-      if (horizSpeedSq > 0.01) {
-        // 0.01 = 0.1² (compare squared values, no sqrt needed)
-        if (currentAnimState !== 'walk') {
-          player.anim.play('walk');
-        }
-      } else {
-        if (currentAnimState !== 'idle') {
-          player.anim.play('idle');
-        }
+    // Terminal / uninterruptible one-shots
+    if (currentAnimState === 'death') {
+      // do nothing — death is permanent
+    } else if (currentAnimState === 'attack') {
+      // attack auto-returns via onMixerFinished; don't override
+    } else if (currentAnimState === 'jump') {
+      // Jump is held at last frame by holdOnFinish. Only transition to
+      // sprint when the player has ACTUALLY settled on the ground — not just
+      // when the ground-check ray first touches (which can be 0.15m above
+      // the surface while still falling fast). Requiring linvel.y > -1
+      // ensures the player's vertical velocity has nearly zeroed out,
+      // meaning the capsule is resting on the surface, not skimming past.
+      const linvelY = player.body.linvel().y;
+      const hasSettled = isGrounded && !justJumpedInGroundWindow && linvelY > -1;
+      if (hasSettled) {
+        player.anim.play('sprint');
       }
+      // Otherwise: still airborne or still falling fast → hold last frame
+    } else if (isSlidingNow) {
+      if (currentAnimState !== 'slide') {
+        player.anim.play('slide');
+      }
+    } else if (currentAnimState !== 'sprint') {
+      player.anim.play('sprint');
     }
   }
 
   // -------------------------------------------------------------------------
-  // Spec section 7 — Register onBeforeStep
+  // Register onBeforeStep
   //
   // The factory registers itself with the engine loop internally. main.ts does
   // NOT need to wire this. The callback passes the fixed DT constant (1/60)
-  // because onBeforeStep callbacks receive no arguments (EngineHandle interface:
-  // `onBeforeStep(cb: () => void): () => void`).
+  // because onBeforeStep callbacks receive no arguments.
   // -------------------------------------------------------------------------
   const unsubBeforeStep = engine.onBeforeStep((): void => {
     update(FIXED_DT);
@@ -565,11 +429,8 @@ export function createMovementController(
       update(fixedDt);
     },
 
-    getAimDirection(): THREE.Vector3 {
-      // Returns the cached aimDir (updated each tick in update()).
-      // NOT a copy — callers should not mutate the returned vector.
-      // Buster Combat reads this to bias lock-on direction.
-      return aimDir;
+    isSliding(): boolean {
+      return slideTimeRemaining > 0;
     },
 
     setEnabled(value: boolean): void {
@@ -585,9 +446,10 @@ export function createMovementController(
 
       disposed = true;
 
-      // Spec section 8 — Unregister all callbacks
+      // Unregister all subscriptions
       unsubBeforeStep();
       unsubJumpPressed();
+      unsubSlidePressed();
     },
   };
 
