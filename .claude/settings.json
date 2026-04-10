@@ -14,7 +14,9 @@
       "Bash(py -m pytest*)",
       "Bash(npx skills:*)",
       "WebFetch(domain:skills.sh)",
-      "Bash(find docs/engine-reference/godot docs/engine-reference/unity docs/engine-reference/unreal -depth -delete)"
+      "Bash(find docs/engine-reference/godot docs/engine-reference/unity docs/engine-reference/unreal -depth -delete)",
+      "Bash(npx tsc:*)",
+      "Bash(npx ctx7@latest library \"Three.js\" \"ShaderMaterial uniforms side BackSide\")"
     ],
     "deny": [
       "Bash(rm -rf *)",

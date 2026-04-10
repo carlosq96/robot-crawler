@@ -21,21 +21,22 @@ Three biomes (Rocky, Ice, Volcanic) recycled with rising difficulty.
 One combat verb: Super Suit attack on cooldown (breaks obstacles, one-shots enemies).
 Inspirations: Pepsi Man, Temple Run, Subway Surfers.
 
-## FOUNDATIONAL DOCUMENTS
-- Game Concept: @design/gdd/game-concept.md
-- Systems Index: @design/gdd/systems-index.md
-- Technical Design Document: @design/tech-stack.md
-- Architecture Map: @docs/architecture.md
+## FOUNDATIONAL DOCUMENTS (read on-demand, NOT auto-loaded)
+- Game Concept: design/gdd/game-concept.md
+- Systems Index: design/gdd/systems-index.md
+- Technical Design Document: design/tech-stack.md
+- Architecture Map: docs/architecture.md
+Read these files when working on related systems. Do NOT reference with @ to avoid bloating every message.
 
 ## TECH STACK
 - Renderer: Three.js r174 (CDN importmap, no bundler)
-- Physics: @dimforge/rapier3d-compat (WASM)
+- Physics: rapier3d-compat (WASM, @dimforge/rapier3d-compat)
 - Persistence: Railway Postgres via pg — single `runs` table for global leaderboard
 - Assets: Meshy AI → GLB → Three.js GLTFLoader + DRACOLoader
 - Frontend deploy: Vercel (auto-deploy from GitHub main)
 - Server deploy: Railway Node.js buildpack (Express only, no Colyseus)
 - Language: TypeScript everywhere (server + client). Client is per-file `tsc` transpiled at Vercel deploy time — NOT bundled. Output is plain ES modules consumed via importmap. See ADR-0001 + ADR-0008.
-- **Dropped in pivot:** Colyseus (no multiplayer), @colyseus/schema, server-authoritative combat. See Superseded ADR-0002 and ADR-0004.
+- **Dropped in pivot:** Colyseus (no multiplayer), colyseus/schema, server-authoritative combat. See Superseded ADR-0002 and ADR-0004.
 
 ## LAYER OWNERSHIP
 - Postgres → leaderboard persistence (one write per run-end POST)
@@ -54,8 +55,16 @@ Every task: Question → Options → Decision → Draft → Approval
 Agents MUST ask before writing to any file.
 No autonomous commits.
 
-## CODING STANDARDS
-@.claude/docs/coding-standards.md
+## CODING STANDARDS (read .claude/docs/coding-standards.md when writing code)
+- Doc comments on public APIs
+- Gameplay values in config, never hardcoded
+- Public methods must be unit-testable (DI over singletons)
+- Verification-driven: tests first for gameplay, screenshots for UI
+- Design docs: 8 required sections (Overview, Player Fantasy, Rules, Formulas, Edge Cases, Dependencies, Tuning Knobs, Acceptance Criteria)
 
-## CONTEXT MANAGEMENT
-@.claude/docs/context-management.md
+## CONTEXT MANAGEMENT (read .claude/docs/context-management.md for full protocol)
+- File is the memory, not the conversation
+- Maintain production/session-state/active.md as living checkpoint
+- Compact proactively at ~60-70% context usage
+- Use subagents for research to keep main context clean
+- Use /clear between unrelated tasks
