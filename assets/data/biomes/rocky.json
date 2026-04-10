@@ -1,0 +1,73 @@
+{
+  "name": "Rocky",
+  "ground": { "color": "#55503a", "roughness": 0.9, "metallic": 0.0 },
+  "chunks": [
+    {
+      "id": "rocky_boulder_zigzag",
+      "obstacles": [
+        { "type": "boulder", "x": -4, "z": -4 },
+        { "type": "boulder", "x": 3, "z": -10 },
+        { "type": "boulder", "x": -3, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 3, "z": -4 },
+        { "type": "stardust", "x": -3, "z": -10 },
+        { "type": "stardust", "x": 3, "z": -16 }
+      ]
+    },
+    {
+      "id": "rocky_crevasse_corridor",
+      "obstacles": [
+        { "type": "crevasse", "x": -2, "z": -5 },
+        { "type": "boulder", "x": 4, "z": -10 },
+        { "type": "crevasse", "x": 1, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 5, "z": -5 },
+        { "type": "stardust", "x": -4, "z": -10 },
+        { "type": "stardust", "x": 5, "z": -16 }
+      ]
+    },
+    {
+      "id": "rocky_boulder_cluster",
+      "obstacles": [
+        { "type": "boulder", "x": -4, "z": -5 },
+        { "type": "boulder", "x": 0, "z": -5 },
+        { "type": "spider", "x": 4, "z": -12 },
+        { "type": "boulder", "x": -2, "z": -17 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 5, "z": -3 },
+        { "type": "stardust", "x": 5, "z": -9 },
+        { "type": "stardust", "x": 5, "z": -17 }
+      ]
+    },
+    {
+      "id": "rocky_spider_alley",
+      "obstacles": [
+        { "type": "spider", "x": -3, "z": -4 },
+        { "type": "crevasse", "x": 2, "z": -10 },
+        { "type": "spider", "x": -1, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -4 },
+        { "type": "stardust", "x": -4, "z": -10 },
+        { "type": "stardust", "x": 5, "z": -16 }
+      ]
+    },
+    {
+      "id": "rocky_mixed_hazards",
+      "obstacles": [
+        { "type": "boulder", "x": -4, "z": -4 },
+        { "type": "crevasse", "x": 2, "z": -9 },
+        { "type": "spider", "x": -2, "z": -14 },
+        { "type": "boulder", "x": 4, "z": -18 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 2, "z": -4 },
+        { "type": "stardust", "x": -4, "z": -9 },
+        { "type": "stardust", "x": 4, "z": -14 }
+      ]
+    }
+  ]
+}

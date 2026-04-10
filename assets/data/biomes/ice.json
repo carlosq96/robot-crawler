@@ -1,0 +1,73 @@
+{
+  "name": "Ice",
+  "ground": { "color": "#c8d8e4", "roughness": 0.3, "metallic": 0.0 },
+  "chunks": [
+    {
+      "id": "ice_pillar_slalom",
+      "obstacles": [
+        { "type": "ice_pillar", "x": -3, "z": -4 },
+        { "type": "ice_pillar", "x": 3, "z": -8 },
+        { "type": "ice_pillar", "x": -3, "z": -12 },
+        { "type": "ice_pillar", "x": 3, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 0, "z": -6 },
+        { "type": "stardust", "x": 0, "z": -10 },
+        { "type": "stardust", "x": 0, "z": -14 }
+      ]
+    },
+    {
+      "id": "ice_wall_gap",
+      "obstacles": [
+        { "type": "ice_pillar", "x": -4, "z": -7 },
+        { "type": "ice_pillar", "x": 0, "z": -7 },
+        { "type": "crevasse", "x": -2, "z": -15 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 5, "z": -7 },
+        { "type": "stardust", "x": 4, "z": -15 }
+      ]
+    },
+    {
+      "id": "ice_frozen_zigzag",
+      "obstacles": [
+        { "type": "ice_pillar", "x": -5, "z": -5 },
+        { "type": "crevasse", "x": 3, "z": -10 },
+        { "type": "ice_pillar", "x": -2, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -5 },
+        { "type": "stardust", "x": -4, "z": -10 },
+        { "type": "stardust", "x": 4, "z": -16 }
+      ]
+    },
+    {
+      "id": "ice_crystal_cave",
+      "obstacles": [
+        { "type": "boulder", "x": -4, "z": -6 },
+        { "type": "ice_pillar", "x": 4, "z": -10 },
+        { "type": "boulder", "x": 0, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 3, "z": -3 },
+        { "type": "stardust", "x": -3, "z": -8 },
+        { "type": "stardust", "x": -4, "z": -13 },
+        { "type": "stardust", "x": 4, "z": -19 }
+      ]
+    },
+    {
+      "id": "ice_gauntlet",
+      "obstacles": [
+        { "type": "spider", "x": -3, "z": -4 },
+        { "type": "ice_pillar", "x": 3, "z": -8 },
+        { "type": "crevasse", "x": -2, "z": -13 },
+        { "type": "ice_pillar", "x": 4, "z": -17 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 3, "z": -4 },
+        { "type": "stardust", "x": -3, "z": -8 },
+        { "type": "stardust", "x": 4, "z": -13 }
+      ]
+    }
+  ]
+}

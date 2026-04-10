@@ -27,7 +27,6 @@
  */
 
 import * as THREE from 'three';
-import * as RAPIER from '@dimforge/rapier3d-compat';
 import { init } from './engine/bootstrap.js';
 import { init as initInput } from './engine/input.js';
 import { createFollowRig, type FollowRigConfig } from './engine/camera-rig.js';
@@ -36,6 +35,8 @@ import { createMovementController, type MovementConfig } from './gameplay/moveme
 import { createRunLifecycle, type RunLifecycleConfig } from './gameplay/run-lifecycle.js';
 import { createObstacleSystem, type ObstacleTypeDefs } from './gameplay/obstacles.js';
 import { createPickupSystem, type PickupTypeDefs } from './gameplay/pickups.js';
+import { createTrackGenerator, type TrackConfig, type BiomeData, type TrackGenerator } from './gameplay/track-generator.js';
+import { createDawnSky } from './engine/sky.js';
 import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
 
@@ -162,44 +163,32 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // Step 5 — Placeholder runway (200 wide × 5000 long along -Z)
+  // Step 5 — Load Track Generator config + biome data
   //
-  // Space Runner auto-runs in world -Z at ~12 m/s. The previous 50×50 ground
-  // gave only ~2 seconds of gameplay before the player ran off the edge.
-  // This placeholder extends 5000 m forward so you can run for ~7 minutes
-  // before reaching the end — plenty for movement/camera iteration until
-  // Track Generator (spec: design/quick-specs/track-generator-2026-04-09.md)
-  // replaces it with real per-chunk ground tiles.
-  //
-  // Runway extends from z = +20 (behind spawn, small safety buffer) to
-  // z = -4980, centered at z = -2480. Width 200 (±100 X) leaves a ton of
-  // lateral room. Top surface sits at y = 0.
+  // The Track Generator produces per-chunk ground tiles, obstacles, and pickups
+  // procedurally from biome templates. It replaces the old placeholder runway.
+  // Track config is planet-independent; biome data is loaded per-planet.
+  // For now we start with Rocky biome — Planet/Checkpoint will cycle biomes.
   // -------------------------------------------------------------------------
-  const RUNWAY_WIDTH = 200;
-  const RUNWAY_LENGTH = 5000;
-  const RUNWAY_CENTER_Z = -RUNWAY_LENGTH / 2 + 20; // +20 safety buffer behind spawn
+  const trackConfigResp = await fetch('/assets/data/track.json');
+  if (!trackConfigResp.ok) {
+    throw new Error(`[main] Failed to load track.json: HTTP ${trackConfigResp.status}`);
+  }
+  const trackConfig = (await trackConfigResp.json()) as TrackConfig;
 
-  const groundGeo = new THREE.BoxGeometry(RUNWAY_WIDTH, 0.5, RUNWAY_LENGTH);
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x303040 });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.receiveShadow = true;
-  ground.position.set(0, -0.25, RUNWAY_CENTER_Z);
-  engine.scene.add(ground);
+  const rockyBiomeResp = await fetch('/assets/data/biomes/rocky.json');
+  if (!rockyBiomeResp.ok) {
+    throw new Error(`[main] Failed to load rocky.json: HTTP ${rockyBiomeResp.status}`);
+  }
+  const rockyBiome = (await rockyBiomeResp.json()) as BiomeData;
+  console.log('[main] Track config + Rocky biome loaded');
 
   // -------------------------------------------------------------------------
-  // Step 5b — Rapier runway collider (matches the visual runway exactly)
-  //
-  // RAPIER.ColliderDesc.cuboid takes HALF-extents, so divide width/length by 2.
+  // Step 5b — Dawn sky dome (visual only — gradient sky + sun glow + fog)
   // -------------------------------------------------------------------------
-  const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.25, RUNWAY_CENTER_Z);
-  const groundBody = engine.world.createRigidBody(groundBodyDesc);
-  const groundColliderDesc = RAPIER.ColliderDesc.cuboid(
-    RUNWAY_WIDTH / 2,
-    0.25,
-    RUNWAY_LENGTH / 2,
-  );
-  engine.world.createCollider(groundColliderDesc, groundBody);
-  console.log(`[main] Runway placeholder: ${RUNWAY_WIDTH} × ${RUNWAY_LENGTH} centered at z=${RUNWAY_CENTER_Z}`);
+  const sky = createDawnSky(engine);
+  engine.onBeforeRender(() => sky.update());
+  console.log('[main] Dawn sky created');
 
   // -------------------------------------------------------------------------
   // Step 6 — Initialize Input Manager (system #4)
@@ -278,59 +267,66 @@ try {
   // -------------------------------------------------------------------------
   // Step 11 — Create UI screens (Title + Results)
   // -------------------------------------------------------------------------
-  const titleScreen = createTitleScreen(runLifecycle);
-  const resultsScreen = createResultsScreen(runLifecycle);
+  createTitleScreen(runLifecycle);
+  createResultsScreen(runLifecycle);
   console.log('[main] UI screens created (Title + Results)');
 
   // -------------------------------------------------------------------------
-  // Step 12 — Wire movement enable/disable to run lifecycle state
+  // Step 12 — Wire movement enable/disable + Track Generator to run lifecycle
   //
   // Movement is disabled during title and results screens so the player
   // doesn't run while menus are showing. Enabled only during 'running'.
+  //
+  // Track Generator is created fresh each run (new seed from run count) and
+  // disposed on death. For now all runs use Rocky biome — Planet/Checkpoint
+  // system will cycle biomes when implemented.
   // -------------------------------------------------------------------------
-  // Start disabled — title screen is showing. Stop all animations so the
-  // player holds a static pose on the title screen instead of cycling legs.
   movement.setEnabled(false);
   player.anim.stopAll();
 
+  let activeTrack: TrackGenerator | null = null;
+  let runCount = 0;
+
   runLifecycle.onStateChange((_from, to) => {
     if (to === 'running') {
-      // Full reset for a fresh run: resurrect player, reset position, enable movement
+      // Dispose previous track if any (e.g. retry from results)
+      if (activeTrack) {
+        activeTrack.dispose();
+        activeTrack = null;
+      }
+
+      // Full reset for a fresh run
       player.reset();
       player.body.setTranslation({ x: 0, y: 2, z: 0 }, true);
       player.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       player.body.setRotation({ x: 0, y: 1, z: 0, w: 0 }, true);
+
+      // Create a new Track Generator for this run
+      runCount++;
+      activeTrack = createTrackGenerator(
+        engine, player, obstacles, pickups, trackConfig,
+        { biome: rockyBiome, seed: `run-${runCount}`, planetIndex: 0 },
+      );
+
+      // Wire jump-gate event (placeholder until Planet/Checkpoint system)
+      activeTrack.onJumpGateReached(() => {
+        console.log('[main] Jump gate reached! (Planet/Checkpoint not yet implemented)');
+      });
+
       movement.setEnabled(true);
     } else if (to === 'title') {
-      // Back to title — freeze animation again
+      // Dispose track when returning to title
+      if (activeTrack) {
+        activeTrack.dispose();
+        activeTrack = null;
+      }
       player.anim.stopAll();
       player.anim.play('sprint');
     } else {
+      // dead / results — disable movement, keep track alive for visual
       movement.setEnabled(false);
     }
   });
-
-  // -------------------------------------------------------------------------
-  // Step 13 — Spawn some test obstacles + pickups on the runway
-  //
-  // Temporary: hand-placed obstacles for testing until Track Generator ships.
-  // These give you something to dodge and collect immediately.
-  // -------------------------------------------------------------------------
-  for (let i = 1; i <= 50; i++) {
-    const z = -i * 30; // one obstacle every 30 meters
-    const x = (Math.random() - 0.5) * 12; // random lateral position ±6m
-    const types = ['boulder', 'ice_pillar', 'lava_pit', 'spider', 'crevasse'];
-    const type = types[i % types.length];
-    obstacles.spawn(type, x, 0, z);
-  }
-  console.log('[main] Spawned 50 test obstacles along the runway');
-
-  for (let i = 1; i <= 100; i++) {
-    const z = -i * 15; // one pickup every 15 meters
-    const x = (Math.random() - 0.5) * 10; // random lateral position ±5m
-    pickups.spawn('stardust', x, 0.5, z);
-  }
-  console.log('[main] Spawned 100 test star dust pickups along the runway');
 
   console.log('[main] Space Runner ready — click START to begin');
 } catch (err) {

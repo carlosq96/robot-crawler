@@ -1,0 +1,18 @@
+{
+  "planetLength": 600,
+  "chunkLength": 20,
+  "chunksAhead": 4,
+  "chunksBehind": 1,
+  "lateralBound": 8,
+  "jumpGate": {
+    "torusRadius": 4,
+    "torusTube": 0.5,
+    "triggerHalfWidth": 8,
+    "triggerHalfHeight": 2.5,
+    "triggerHalfDepth": 0.5,
+    "localZOffset": -18,
+    "color": "#00ffff",
+    "emissiveColor": "#004488",
+    "emissiveIntensity": 2
+  }
+}

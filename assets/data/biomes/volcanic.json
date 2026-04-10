@@ -1,0 +1,73 @@
+{
+  "name": "Volcanic",
+  "ground": { "color": "#3a1a10", "roughness": 0.85, "metallic": 0.0 },
+  "chunks": [
+    {
+      "id": "volcanic_lava_crossing",
+      "obstacles": [
+        { "type": "lava_pit", "x": -3, "z": -5 },
+        { "type": "lava_pit", "x": 3, "z": -10 },
+        { "type": "lava_pit", "x": -3, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -5 },
+        { "type": "stardust", "x": -4, "z": -10 },
+        { "type": "stardust", "x": 4, "z": -16 }
+      ]
+    },
+    {
+      "id": "volcanic_meteor_field",
+      "obstacles": [
+        { "type": "boulder", "x": -5, "z": -4 },
+        { "type": "boulder", "x": 2, "z": -8 },
+        { "type": "boulder", "x": -2, "z": -13 },
+        { "type": "boulder", "x": 5, "z": -17 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 0, "z": -6 },
+        { "type": "stardust", "x": 0, "z": -15 }
+      ]
+    },
+    {
+      "id": "volcanic_spider_lava",
+      "obstacles": [
+        { "type": "spider", "x": -3, "z": -5 },
+        { "type": "lava_pit", "x": 3, "z": -10 },
+        { "type": "spider", "x": 0, "z": -16 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -5 },
+        { "type": "stardust", "x": -4, "z": -10 },
+        { "type": "stardust", "x": 4, "z": -16 }
+      ]
+    },
+    {
+      "id": "volcanic_gauntlet",
+      "obstacles": [
+        { "type": "lava_pit", "x": -4, "z": -4 },
+        { "type": "boulder", "x": 3, "z": -8 },
+        { "type": "lava_pit", "x": -2, "z": -13 },
+        { "type": "spider", "x": 4, "z": -17 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -4 },
+        { "type": "stardust", "x": -3, "z": -8 }
+      ]
+    },
+    {
+      "id": "volcanic_hellscape",
+      "obstacles": [
+        { "type": "boulder", "x": -5, "z": -3 },
+        { "type": "lava_pit", "x": 2, "z": -7 },
+        { "type": "spider", "x": -3, "z": -11 },
+        { "type": "boulder", "x": 4, "z": -15 },
+        { "type": "lava_pit", "x": 0, "z": -19 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 0, "z": -5 },
+        { "type": "stardust", "x": -4, "z": -9 },
+        { "type": "stardust", "x": 4, "z": -13 }
+      ]
+    }
+  ]
+}
