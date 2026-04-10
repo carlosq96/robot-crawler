@@ -185,6 +185,13 @@ export interface Player {
    */
   setState(newState: PlayerState): void;
 
+  /**
+   * Full reset for Space Runner retry: restores HP to maxHp, sets state to alive,
+   * plays the sprint animation. Bypasses the normal dead-is-terminal guard.
+   * Called by main.ts on retry to resurrect the player for a new run.
+   */
+  reset(): void;
+
   // Lifecycle hooks — each returns an unsubscribe function
   /**
    * Subscribe to any state transition. Fires with (oldState, newState).
@@ -712,6 +719,23 @@ export async function createPlayer(
         const idx = reviveSubscribers.indexOf(cb);
         if (idx !== -1) reviveSubscribers.splice(idx, 1);
       };
+    },
+
+    // -----------------------------------------------------------------------
+    // Reset (Space Runner retry)
+    // -----------------------------------------------------------------------
+
+    reset(): void {
+      // Bypass the dead-is-terminal guard — this is an explicit full reset.
+      state = 'alive';
+      hp = config.maxHp;
+      revivalsRemaining = 0; // Space Runner: on-touch death, no revivals
+      // Hard-stop all actions to clear clamped death state. Without this,
+      // the second death after retry plays the wrong animation because
+      // Three.js's internal action flags persist from the first death.
+      anim.stopAll();
+      anim.play('sprint');
+      console.log(`[Player:${id}] reset() — alive, hp=${hp}`);
     },
 
     // -----------------------------------------------------------------------

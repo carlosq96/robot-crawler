@@ -33,6 +33,11 @@ import { init as initInput } from './engine/input.js';
 import { createFollowRig, type FollowRigConfig } from './engine/camera-rig.js';
 import { createPlayer, type PlayerConfig } from './gameplay/player.js';
 import { createMovementController, type MovementConfig } from './gameplay/movement.js';
+import { createRunLifecycle, type RunLifecycleConfig } from './gameplay/run-lifecycle.js';
+import { createObstacleSystem, type ObstacleTypeDefs } from './gameplay/obstacles.js';
+import { createPickupSystem, type PickupTypeDefs } from './gameplay/pickups.js';
+import { createTitleScreen } from './ui/title-screen.js';
+import { createResultsScreen } from './ui/results-screen.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -224,7 +229,110 @@ try {
   const movement = createMovementController(engine, player, input, movementConfig);
   console.log('[main] Movement Controller created — auto-run + A/D dodge + Space jump + Shift slide');
 
-  console.log('[main] Space Runner ready — A/D to dodge, Space to jump, Shift to slide');
+  // -------------------------------------------------------------------------
+  // Step 8 — Load Run Lifecycle config and create the state machine
+  // -------------------------------------------------------------------------
+  const runLifecycleResp = await fetch('/assets/data/run-lifecycle.json');
+  if (!runLifecycleResp.ok) {
+    throw new Error(`[main] Failed to load run-lifecycle.json: HTTP ${runLifecycleResp.status}`);
+  }
+  const runLifecycleConfig = (await runLifecycleResp.json()) as RunLifecycleConfig;
+  const runLifecycle = createRunLifecycle({ engine, player }, runLifecycleConfig);
+  console.log('[main] Run Lifecycle created — state:', runLifecycle.getState());
+
+  // -------------------------------------------------------------------------
+  // Step 9 — Load Obstacle System
+  // -------------------------------------------------------------------------
+  const obstaclesResp = await fetch('/assets/data/obstacles.json');
+  if (!obstaclesResp.ok) {
+    throw new Error(`[main] Failed to load obstacles.json: HTTP ${obstaclesResp.status}`);
+  }
+  const obstacleTypeDefs = (await obstaclesResp.json()) as ObstacleTypeDefs;
+  const obstacles = createObstacleSystem({ engine, player }, obstacleTypeDefs);
+  console.log('[main] Obstacle System created');
+
+  // Wire obstacle hits to run lifecycle
+  obstacles.onObstacleHit(() => {
+    // On-touch death — takeDamage already called by obstacle system
+  });
+  obstacles.onObstacleBroken(() => {
+    runLifecycle.reportObstacleBroken();
+  });
+
+  // -------------------------------------------------------------------------
+  // Step 10 — Load Pickup System (Star Dust)
+  // -------------------------------------------------------------------------
+  const pickupsResp = await fetch('/assets/data/pickups.json');
+  if (!pickupsResp.ok) {
+    throw new Error(`[main] Failed to load pickups.json: HTTP ${pickupsResp.status}`);
+  }
+  const pickupTypeDefs = (await pickupsResp.json()) as PickupTypeDefs;
+  const pickups = createPickupSystem({ engine, player }, pickupTypeDefs);
+  console.log('[main] Pickup System created');
+
+  // Wire pickups to run lifecycle
+  pickups.onPickup((_type, _value) => {
+    runLifecycle.reportPickup(_value);
+  });
+
+  // -------------------------------------------------------------------------
+  // Step 11 — Create UI screens (Title + Results)
+  // -------------------------------------------------------------------------
+  const titleScreen = createTitleScreen(runLifecycle);
+  const resultsScreen = createResultsScreen(runLifecycle);
+  console.log('[main] UI screens created (Title + Results)');
+
+  // -------------------------------------------------------------------------
+  // Step 12 — Wire movement enable/disable to run lifecycle state
+  //
+  // Movement is disabled during title and results screens so the player
+  // doesn't run while menus are showing. Enabled only during 'running'.
+  // -------------------------------------------------------------------------
+  // Start disabled — title screen is showing. Stop all animations so the
+  // player holds a static pose on the title screen instead of cycling legs.
+  movement.setEnabled(false);
+  player.anim.stopAll();
+
+  runLifecycle.onStateChange((_from, to) => {
+    if (to === 'running') {
+      // Full reset for a fresh run: resurrect player, reset position, enable movement
+      player.reset();
+      player.body.setTranslation({ x: 0, y: 2, z: 0 }, true);
+      player.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      player.body.setRotation({ x: 0, y: 1, z: 0, w: 0 }, true);
+      movement.setEnabled(true);
+    } else if (to === 'title') {
+      // Back to title — freeze animation again
+      player.anim.stopAll();
+      player.anim.play('sprint');
+    } else {
+      movement.setEnabled(false);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Step 13 — Spawn some test obstacles + pickups on the runway
+  //
+  // Temporary: hand-placed obstacles for testing until Track Generator ships.
+  // These give you something to dodge and collect immediately.
+  // -------------------------------------------------------------------------
+  for (let i = 1; i <= 50; i++) {
+    const z = -i * 30; // one obstacle every 30 meters
+    const x = (Math.random() - 0.5) * 12; // random lateral position ±6m
+    const types = ['boulder', 'ice_pillar', 'lava_pit', 'spider', 'crevasse'];
+    const type = types[i % types.length];
+    obstacles.spawn(type, x, 0, z);
+  }
+  console.log('[main] Spawned 50 test obstacles along the runway');
+
+  for (let i = 1; i <= 100; i++) {
+    const z = -i * 15; // one pickup every 15 meters
+    const x = (Math.random() - 0.5) * 10; // random lateral position ±5m
+    pickups.spawn('stardust', x, 0.5, z);
+  }
+  console.log('[main] Spawned 100 test star dust pickups along the runway');
+
+  console.log('[main] Space Runner ready — click START to begin');
 } catch (err) {
   showFallback('Engine failed to initialize. Open the browser console for details.');
   console.error('[main] Startup failed:', err);

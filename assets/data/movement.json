@@ -2,7 +2,7 @@
   "forwardSpeed": 12.0,
   "lateralSpeed": 15.0,
   "lateralAcceleration": 40.0,
-  "jumpVelocity": 8.0,
+  "jumpVelocity": 10.0,
   "airControl": 0.8,
   "slideDuration": 0.6,
   "slideSpeedBoost": 4.0,

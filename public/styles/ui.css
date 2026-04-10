@@ -1,0 +1,105 @@
+/**
+ * @file public/styles/ui.css
+ * @description Game UI overlay styles for Space Runner.
+ * Covers title screen, results screen, and shared panel components.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Base reset for UI context
+ * ---------------------------------------------------------------------------*/
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared overlay container
+ * Used by: #title-screen, #results-screen
+ * ---------------------------------------------------------------------------*/
+
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* ---------------------------------------------------------------------------
+ * Inner panel — the card that holds all content
+ * ---------------------------------------------------------------------------*/
+
+.ui-panel {
+  max-width: 400px;
+  width: 100%;
+  padding: 3rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+ * Typography
+ * ---------------------------------------------------------------------------*/
+
+.ui-title {
+  color: white;
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 0 0 1rem 0;
+  letter-spacing: 0.2em;
+}
+
+.ui-subtitle {
+  color: #888888;
+  font-size: 1rem;
+  margin: 0 0 2rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Primary action button (START, RETRY)
+ * ---------------------------------------------------------------------------*/
+
+.ui-button {
+  background: white;
+  color: #111111;
+  border: none;
+  padding: 1rem 3rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: 4px;
+  transition: transform 0.2s ease, background 0.2s ease;
+  margin-top: 1.5rem;
+}
+
+.ui-button:hover {
+  transform: scale(1.05);
+  background: #66ffcc;
+}
+
+/* ---------------------------------------------------------------------------
+ * Stats rows (results screen)
+ * ---------------------------------------------------------------------------*/
+
+.ui-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  color: white;
+  font-size: 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ui-stat-value {
+  font-weight: bold;
+}
+
+.ui-score-value {
+  font-size: 2rem;
+  color: #66ffcc;
+  font-weight: bold;
+}

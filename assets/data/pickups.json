@@ -1,0 +1,12 @@
+{
+  "types": {
+    "stardust": {
+      "mesh": { "shape": "octahedron", "radius": 0.4, "color": "#66ffcc", "emissive": "#22aa88" },
+      "collectRadius": 1.5,
+      "value": 10,
+      "bobAmplitude": 0.15,
+      "bobSpeed": 2.0,
+      "spinSpeed": 1.5
+    }
+  }
+}

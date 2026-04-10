@@ -200,6 +200,14 @@ export interface AnimationController {
   play(state: string, options?: { crossfade?: number }): void;
 
   /**
+   * Stop all actions and clear current/previous state. Necessary before
+   * replaying a one-shot that was previously clamped via holdOnFinish
+   * (e.g. death). Without this, the clamped action's internal paused/finished
+   * flags persist across play() calls and produce wrong animations.
+   */
+  stopAll(): void;
+
+  /**
    * Returns the currently active state name, or null if nothing has been played yet.
    *
    * @example
@@ -577,6 +585,19 @@ export function createAnimationController(
   const handle: AnimationController = {
     play(state: string, options?: { crossfade?: number }): void {
       play(state, options);
+    },
+
+    /**
+     * Stop all actions and clear state. Call before play() when the mixer needs
+     * a hard reset (e.g. player retry after death — the clamped death action
+     * must be fully stopped before a new sprint→death cycle can play cleanly).
+     */
+    stopAll(): void {
+      for (const action of actionMap.values()) {
+        action.stop();
+      }
+      currentState = null;
+      previousState = null;
     },
 
     getCurrentState(): string | null {

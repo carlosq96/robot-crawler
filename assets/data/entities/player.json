@@ -33,7 +33,7 @@
       "death":  false
     },
     "returnState": "sprint",
-    "holdOnFinish": ["jump"],
+    "holdOnFinish": ["jump", "death"],
     "defaultCrossfade": 0.2,
     "crossfadeOverrides": {
       "jump":   0.05,

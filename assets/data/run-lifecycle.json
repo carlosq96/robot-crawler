@@ -1,0 +1,9 @@
+{
+  "deathHoldSec": 1.5,
+  "scoreWeights": {
+    "distance": 1,
+    "planetsCleared": 500,
+    "crystalsCollected": 10,
+    "obstaclesBroken": 25
+  }
+}
