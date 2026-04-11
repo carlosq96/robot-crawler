@@ -39,6 +39,7 @@ import { createTrackGenerator, type TrackConfig, type BiomeData, type TrackGener
 import { createDawnSky } from './engine/sky.js';
 import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
+import { createHUD, type HUDConfig } from './ui/hud.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -265,11 +266,18 @@ try {
   });
 
   // -------------------------------------------------------------------------
-  // Step 11 — Create UI screens (Title + Results)
+  // Step 11 — Create UI screens (Title + Results) + HUD
   // -------------------------------------------------------------------------
   createTitleScreen(runLifecycle);
   createResultsScreen(runLifecycle);
-  console.log('[main] UI screens created (Title + Results)');
+
+  const hudConfigResp = await fetch('/assets/data/hud.json');
+  if (!hudConfigResp.ok) {
+    throw new Error(`[main] Failed to load hud.json: HTTP ${hudConfigResp.status}`);
+  }
+  const hudConfig = (await hudConfigResp.json()) as HUDConfig;
+  createHUD(runLifecycle, pickups, hudConfig);
+  console.log('[main] UI screens + HUD created');
 
   // -------------------------------------------------------------------------
   // Step 12 — Wire movement enable/disable + Track Generator to run lifecycle

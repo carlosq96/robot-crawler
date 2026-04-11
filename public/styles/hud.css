@@ -1,0 +1,112 @@
+/**
+ * @file public/styles/hud.css
+ * @description HUD overlay styles — distance, star dust, score, pickup popups.
+ * Visible only during 'running' state; hidden otherwise via display:none.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Root HUD container — sits above the canvas, pointer-events: none so it
+ * never blocks game input.
+ * ---------------------------------------------------------------------------*/
+
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  font-family: 'Segoe UI', system-ui, monospace;
+  user-select: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Top-left — distance
+ * ---------------------------------------------------------------------------*/
+
+.hud-top-left {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+}
+
+.hud-distance {
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(102, 255, 204, 0.6), 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.hud-distance-label {
+  color: #888888;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 0.1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Top-right — score + star dust
+ * ---------------------------------------------------------------------------*/
+
+.hud-top-right {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  text-align: right;
+}
+
+.hud-score {
+  color: #66ffcc;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 10px rgba(102, 255, 204, 0.7), 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.hud-score-label {
+  color: #888888;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 0.1rem;
+}
+
+.hud-stardust {
+  margin-top: 0.75rem;
+  color: #ffdd88;
+  font-size: 1.1rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(255, 221, 136, 0.5), 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.hud-stardust-icon {
+  margin-right: 0.3em;
+  opacity: 0.9;
+}
+
+/* ---------------------------------------------------------------------------
+ * Pickup popups — float up and fade out on collection
+ * ---------------------------------------------------------------------------*/
+
+.hud-popups {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-popup {
+  position: absolute;
+  color: #ffdd88;
+  font-size: 1.2rem;
+  font-weight: bold;
+  text-shadow: 0 0 6px rgba(255, 221, 136, 0.8), 0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  animation: hud-popup-float var(--popup-duration, 1s) ease-out forwards;
+}
+
+@keyframes hud-popup-float {
+  0%   { opacity: 1;   transform: translateY(0);     }
+  30%  { opacity: 1;   transform: translateY(-12px);  }
+  100% { opacity: 0;   transform: translateY(-40px);  }
+}
