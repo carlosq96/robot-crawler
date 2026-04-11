@@ -297,7 +297,14 @@ export function createMovementController(
     jumpRequested = false;
 
     // Clear the lockout when the upward impulse is spent.
-    if (justJumpedInGroundWindow && linvelForJump.y <= 0.01) {
+    // IMPORTANT: read velocity AFTER the jump impulse is applied. Using
+    // linvelForJump (sampled before the impulse) would see the pre-jump
+    // Y ≈ 0, satisfy the <= 0.01 check, and clear the lockout on the SAME
+    // frame the jump fires — causing the animation transition block below
+    // to see hasSettled=true and immediately override the jump animation
+    // with sprint.
+    const postJumpLinvelY = player.body.linvel().y;
+    if (justJumpedInGroundWindow && postJumpLinvelY <= 0.01) {
       justJumpedInGroundWindow = false;
     }
 

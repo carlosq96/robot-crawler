@@ -593,11 +593,28 @@ export function createAnimationController(
      * must be fully stopped before a new sprint→death cycle can play cleanly).
      */
     stopAll(): void {
-      for (const action of actionMap.values()) {
-        action.stop();
+      // Use mixer.stopAllAction() for thoroughness, then explicitly reset
+      // each tracked action to clear residual clamp/fade/weight state that
+      // stop() alone may not fully flush in Three.js's LoopOnce +
+      // clampWhenFinished code path.
+      mixer.stopAllAction();
+      for (const [stateName, action] of actionMap.entries()) {
+        // stop() calls reset() internally, but an explicit reset() after
+        // stopAllAction() ensures weight interpolants and clamp flags are
+        // fully cleared even if Three.js's deactivation left stale state.
+        action.reset();
+        // Restore the per-state time scale that was configured at init.
+        // reset() wipes timeScale back to 1; we need the configured value
+        // so the next play() cycle gets the correct speed.
+        const rawTS = config.timeScales?.[stateName] ?? 1.0;
+        const clampedTS = Math.max(0.1, Math.min(rawTS, 4.0));
+        if (clampedTS !== 1.0) {
+          action.setEffectiveTimeScale(clampedTS);
+        }
       }
       currentState = null;
       previousState = null;
+      lastNormalizedTime.clear();
     },
 
     getCurrentState(): string | null {

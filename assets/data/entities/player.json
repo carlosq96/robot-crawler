@@ -38,7 +38,8 @@
     "crossfadeOverrides": {
       "jump":   0.05,
       "attack": 0.05,
-      "slide":  0.05
+      "slide":  0.05,
+      "death":  0.05
     },
     "startOffsets": {
       "jump": 0.2
