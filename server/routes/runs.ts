@@ -65,7 +65,13 @@ runsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
     const id = insertResult.rows[0].id;
 
     const rankResult = await pool.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM runs WHERE score > $1`,
+      `SELECT COUNT(DISTINCT username) AS count
+       FROM (
+         SELECT DISTINCT ON (username) username, score
+         FROM runs
+         ORDER BY username, score DESC
+       ) best
+       WHERE score > $1`,
       [score],
     );
     const rank = parseInt(rankResult.rows[0].count, 10) + 1;
@@ -86,10 +92,15 @@ runsRouter.get('/top', async (req: Request, res: Response): Promise<void> => {
   const limit = Number.isNaN(rawLimit) ? 10 : Math.min(Math.max(rawLimit, 1), 100);
 
   try {
+    // One row per username — their personal best run only.
     const result = await pool.query(
-      `SELECT id, username, distance, planets_cleared AS "planetsCleared",
-              crystals, score, created_at AS "createdAt"
-       FROM runs
+      `SELECT * FROM (
+         SELECT DISTINCT ON (username)
+           id, username, distance, planets_cleared AS "planetsCleared",
+           crystals, score, created_at AS "createdAt"
+         FROM runs
+         ORDER BY username, score DESC
+       ) best
        ORDER BY score DESC
        LIMIT $1`,
       [limit],
