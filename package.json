@@ -10,7 +10,8 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:client && npm run build:server",
     "watch:client": "tsc -p tsconfig.client.json --watch",
-    "dev": "concurrently -k -n tsc,serve -c blue,green \"npm run watch:client\" \"npx serve . -l 3000\"",
+    "dev:server": "node --env-file=.env --watch dist/server/index.js",
+    "dev": "npm run build:server && concurrently -k -n tsc,serve,api -c blue,green,cyan \"npm run watch:client\" \"npx serve . -l 3000\" \"npm run dev:server\"",
     "test": "vitest run"
   },
   "devDependencies": {

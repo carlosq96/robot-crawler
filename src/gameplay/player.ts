@@ -192,6 +192,21 @@ export interface Player {
    */
   reset(): void;
 
+  /**
+   * Shrink the capsule collider to the given halfHeight for sliding/crouching.
+   * Also updates the internal mesh Y offset so feet stay on the ground.
+   * Rapier physics will lower the body to maintain ground contact automatically.
+   *
+   * @param halfHeight - New capsule half-height (shorter than standing).
+   */
+  setCrouchHalfHeight(halfHeight: number): void;
+
+  /**
+   * Restore the capsule collider and mesh offset to their standing values.
+   * Call when the slide/crouch state ends.
+   */
+  restoreStandingHeight(): void;
+
   // Lifecycle hooks — each returns an unsubscribe function
   /**
    * Subscribe to any state transition. Fires with (oldState, newState).
@@ -272,36 +287,57 @@ const ROOT_BONE_NAME = 'Hips';
  * clip ends and Hips returns to its rest position.
  *
  * THE FIX:
- * Remove every track whose name ends with `${ROOT_BONE_NAME}.position` from
- * every clip. Rotation tracks on Hips and all child bone tracks are preserved,
- * so arms/legs/spine still animate normally. The clip becomes "in-place" —
- * position is 100% physics-driven, animation is purely cosmetic bone pose.
+ * For most clips: remove the Hips.position track entirely. Position is 100%
+ * physics-driven.
+ *
+ * SLIDE EXCEPTION:
+ * The slide animation needs its Hips.position.Y preserved — that Y track is
+ * what lowers the hips toward the ground, making the feet land on the surface.
+ * Stripping Y from the slide clip leaves the hips at standing height and the
+ * feet float. For clips in `preserveYClipNames`, we zero out X and Z (no
+ * horizontal drift) but leave Y untouched (allows the crouch to work).
  *
  * WHY ends-with MATCH:
  * Some GLTFLoader exports prefix bone names with the Armature node (e.g.
  * `Armature|Hips.position`). endsWith() covers both bare and prefixed variants
  * without needing to know the exact naming scheme Meshy used.
  *
- * WHY HERE (not in animation-controller.ts):
- * This is a rig-specific preprocessing step. The AnimationController is
- * generic and should not know about Meshy skeleton conventions. Player System
- * owns its own rig quirks.
- *
- * @param clips - Animation clips from the loaded GLB. Mutated in place.
+ * @param clips              - Animation clips from the loaded GLB. Mutated in place.
+ * @param preserveYClipNames - Clip names where Hips Y should be kept (slide etc.).
  */
-function stripRootMotion(clips: THREE.AnimationClip[]): void {
+function stripRootMotion(
+  clips: THREE.AnimationClip[],
+  preserveYClipNames: ReadonlySet<string> = new Set(),
+): void {
   const trackSuffix = `${ROOT_BONE_NAME}.position`;
   let totalStripped = 0;
+  let totalPreservedY = 0;
+
   for (const clip of clips) {
-    const before = clip.tracks.length;
-    clip.tracks = clip.tracks.filter(
-      (track) => !track.name.endsWith(trackSuffix),
-    );
-    totalStripped += before - clip.tracks.length;
+    if (preserveYClipNames.has(clip.name)) {
+      // Zero X and Z values, keep Y so the crouch / slide height works.
+      for (const track of clip.tracks) {
+        if (!track.name.endsWith(trackSuffix)) continue;
+        const vals = track.values as Float32Array;
+        for (let i = 0; i < vals.length; i += 3) {
+          vals[i]     = 0; // X → 0
+          // vals[i+1]    Y  → unchanged (crouch height)
+          vals[i + 2] = 0; // Z → 0
+        }
+        totalPreservedY++;
+      }
+    } else {
+      // Remove the track entirely — no position drift allowed.
+      const before = clip.tracks.length;
+      clip.tracks = clip.tracks.filter((t) => !t.name.endsWith(trackSuffix));
+      totalStripped += before - clip.tracks.length;
+    }
   }
+
   console.log(
-    `[Player] Stripped ${totalStripped} ${trackSuffix} tracks from ${clips.length} clips ` +
-    `(in-place animations — physics is authoritative for position)`,
+    `[Player] Root motion: removed ${totalStripped} tracks, ` +
+    `preserved Y on ${totalPreservedY} track(s) (slide clip) ` +
+    `— physics authoritative for X/Z position`,
   );
 }
 
@@ -439,7 +475,10 @@ export async function createPlayer(
       animationClips.push(clip);
     }
   }
-  stripRootMotion(animationClips);
+  // Slide clip needs its Hips.position.Y preserved so the crouch lowers
+  // the character to the ground. All other clips get Y stripped too.
+  const slideClipName = config.animation.clipMap['slide'] ?? '';
+  stripRootMotion(animationClips, new Set(slideClipName ? [slideClipName] : []));
 
   // -------------------------------------------------------------------------
   // DIAGNOSTIC: print all clip names + durations + clipMap resolution before
@@ -548,7 +587,8 @@ export async function createPlayer(
   //
   // We reuse module-level _syncPos to avoid per-step allocations.
   // -------------------------------------------------------------------------
-  const meshYOffset = config.capsuleHeight / 2 + config.capsuleRadius;
+  const standingMeshYOffset = config.capsuleHeight / 2 + config.capsuleRadius;
+  let meshYOffset = standingMeshYOffset;
   const unsubAfterStep = engine.onAfterStep(() => {
     if (disposed) return;
     const t = body.translation();
@@ -736,6 +776,20 @@ export async function createPlayer(
       anim.stopAll();
       anim.play('sprint');
       console.log(`[Player:${id}] reset() — alive, hp=${hp}`);
+    },
+
+    // -----------------------------------------------------------------------
+    // Crouch / slide height
+    // -----------------------------------------------------------------------
+
+    setCrouchHalfHeight(halfHeight: number): void {
+      body.collider(0).setHalfHeight(halfHeight);
+      meshYOffset = halfHeight + config.capsuleRadius;
+    },
+
+    restoreStandingHeight(): void {
+      body.collider(0).setHalfHeight(capsuleHalfHeight);
+      meshYOffset = standingMeshYOffset;
     },
 
     // -----------------------------------------------------------------------

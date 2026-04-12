@@ -1,0 +1,15 @@
+{
+  "defaultSfxVolume": 0.8,
+  "defaultMusicVolume": 0.5,
+  "sfxPaths": {
+    "pickup_stardust":    "/assets/audio/sfx/pickup_stardust.mp3",
+    "obstacle_hit_rock":  "/assets/audio/sfx/obstacle_hit_rock.mp3",
+    "obstacle_hit_ice":   "/assets/audio/sfx/obstacle_hit_ice.mp3",
+    "jump":               "/assets/audio/sfx/jump.mp3",
+    "slide":              "/assets/audio/sfx/slide.mp3",
+    "super_suit":         "/assets/audio/sfx/super_suit.mp3",
+    "jump_gate_warp":     "/assets/audio/sfx/jump_gate_warp.mp3",
+    "player_death":       "/assets/audio/sfx/player_death.mp3"
+  },
+  "musicPaths": {}
+}

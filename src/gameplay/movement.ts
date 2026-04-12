@@ -71,6 +71,11 @@ export interface MovementConfig {
   slideSpeedBoost: number;
   /** Distance in meters below the capsule bottom to cast the ground-check ray. Default: 0.15. */
   groundCheckDistance: number;
+  /**
+   * Capsule halfHeight used while sliding (makes the collider shorter so the player
+   * physically lowers to the ground). Default: 0.1 (crouches from 1.8 m to ~1.0 m).
+   */
+  slideCapsuleHalfHeight: number;
 }
 
 /**
@@ -120,6 +125,18 @@ export interface MovementController {
    * Returns whether input processing is currently enabled.
    */
   isEnabled(): boolean;
+
+  /**
+   * Subscribe to the moment a jump impulse is applied (grounded + not in lockout).
+   * @returns Unsubscribe function.
+   */
+  onJump(cb: () => void): () => void;
+
+  /**
+   * Subscribe to the moment a slide state begins (grounded + not already sliding).
+   * @returns Unsubscribe function.
+   */
+  onSlide(cb: () => void): () => void;
 
   /**
    * Tear down the controller: unregisters the onBeforeStep callback, resets
@@ -181,6 +198,9 @@ export function createMovementController(
    * update; only converts into an active slide if grounded AND not already sliding.
    */
   let slideRequested: boolean = false;
+
+  const jumpSubscribers: Array<() => void> = [];
+  const slideSubscribers: Array<() => void> = [];
 
   /**
    * Seconds remaining in the current slide state. 0 means not sliding.
@@ -244,6 +264,9 @@ export function createMovementController(
       const linvel = player.body.linvel();
       player.body.setLinvel({ x: 0, y: linvel.y, z: 0 }, true);
       // Clear any pending slide state so we don't resume sliding after enable.
+      if (slideTimeRemaining > 0) {
+        player.restoreStandingHeight();
+      }
       slideTimeRemaining = 0;
       jumpRequested = false;
       slideRequested = false;
@@ -291,6 +314,7 @@ export function createMovementController(
       );
       player.anim.play('jump');
       justJumpedInGroundWindow = true;
+      for (const cb of jumpSubscribers) cb();
     }
     // Always consume the request — a single press fires one jump attempt regardless
     // of whether it was applied. Prevents stale requests from accumulating.
@@ -314,9 +338,13 @@ export function createMovementController(
     // Only activate if grounded and not already sliding. Consumes the request
     // regardless (prevents a stale request from triggering mid-air later).
     // -----------------------------------------------------------------------
+    const wasSliding = slideTimeRemaining > 0;
+
     if (slideRequested && isGrounded && !justJumpedInGroundWindow && slideTimeRemaining <= 0) {
       slideTimeRemaining = config.slideDuration;
       player.anim.play('slide');
+      player.setCrouchHalfHeight(config.slideCapsuleHalfHeight);
+      for (const cb of slideSubscribers) cb();
     }
     slideRequested = false;
 
@@ -326,6 +354,11 @@ export function createMovementController(
     // slide still gets a full duration window.
     if (isSlidingNow) {
       slideTimeRemaining -= fixedDt;
+    }
+
+    // Restore standing capsule when slide ends
+    if (wasSliding && slideTimeRemaining <= 0) {
+      player.restoreStandingHeight();
     }
 
     // -----------------------------------------------------------------------
@@ -446,6 +479,16 @@ export function createMovementController(
 
     isEnabled(): boolean {
       return enabled;
+    },
+
+    onJump(cb: () => void): () => void {
+      jumpSubscribers.push(cb);
+      return () => { const i = jumpSubscribers.indexOf(cb); if (i !== -1) jumpSubscribers.splice(i, 1); };
+    },
+
+    onSlide(cb: () => void): () => void {
+      slideSubscribers.push(cb);
+      return () => { const i = slideSubscribers.indexOf(cb); if (i !== -1) slideSubscribers.splice(i, 1); };
     },
 
     dispose(): void {

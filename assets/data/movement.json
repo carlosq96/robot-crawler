@@ -6,5 +6,6 @@
   "airControl": 0.8,
   "slideDuration": 0.6,
   "slideSpeedBoost": 4.0,
-  "groundCheckDistance": 0.08
+  "groundCheckDistance": 0.08,
+  "slideCapsuleHalfHeight": 0.1
 }

@@ -42,6 +42,7 @@ import { createDawnSky } from './engine/sky.js';
 import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
 import { createHUD, type HUDConfig } from './ui/hud.js';
+import { createAudioSystem, type AudioSystemConfig } from './engine/audio-system.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -79,6 +80,20 @@ try {
   // -------------------------------------------------------------------------
   const engine = await init(canvas);
   console.log('[main] Engine bootstrapped successfully');
+
+  // -------------------------------------------------------------------------
+  // Step 1b — Load audio config and create Audio System
+  //
+  // Created early so every downstream system can call audio.playSfx().
+  // Gracefully no-ops on missing files — never throws.
+  // -------------------------------------------------------------------------
+  const audioConfigResp = await fetch('/assets/data/audio.json');
+  if (!audioConfigResp.ok) {
+    throw new Error(`[main] Failed to load audio.json: HTTP ${audioConfigResp.status}`);
+  }
+  const audioConfig = (await audioConfigResp.json()) as AudioSystemConfig;
+  const audio = await createAudioSystem(audioConfig);
+  console.log('[main] Audio System created');
 
   // -------------------------------------------------------------------------
   // Step 2 — Load camera config and create follow rig
@@ -335,9 +350,10 @@ try {
         trackConfig, biomeMap, `run-${runCount}`, planetConfig,
       );
 
-      // Wire planet change to run lifecycle stats
+      // Wire planet change to run lifecycle stats + audio
       activePlanetCheckpoint.onPlanetChanged((_biome, _idx) => {
         runLifecycle.reportPlanetCleared();
+        audio.playSfx('jump_gate_warp');
       });
 
       movement.setEnabled(true);
@@ -356,6 +372,16 @@ try {
       superSuit.setEnabled(false);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Audio wiring — connect SFX callbacks to all gameplay events
+  // -------------------------------------------------------------------------
+  movement.onJump(() => audio.playSfx('jump'));
+  movement.onSlide(() => audio.playSfx('slide'));
+  player.onDeath(() => audio.playSfx('player_death'));
+  obstacles.onObstacleHit((type) => audio.playSfx(type.includes('ice') ? 'obstacle_hit_ice' : 'obstacle_hit_rock'));
+  pickups.onPickup(() => audio.playSfx('pickup_stardust'));
+  superSuit.onAttackResolved(() => audio.playSfx('super_suit'));
 
   console.log('[main] Space Runner ready — click START to begin');
 } catch (err) {
