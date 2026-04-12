@@ -1,0 +1,10 @@
+{
+  "startBiome": "rocky",
+  "biomeCycle": ["rocky", "ice", "volcanic"],
+  "warpLaunchVelocityY": 14,
+  "warpCutTimeSec": 0.85,
+  "playerSpawnX": 0,
+  "playerSpawnZ": -15,
+  "playerSpawnY": 2,
+  "landingThresholdY": 2.2
+}

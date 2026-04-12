@@ -35,7 +35,8 @@ import { createMovementController, type MovementConfig } from './gameplay/moveme
 import { createRunLifecycle, type RunLifecycleConfig } from './gameplay/run-lifecycle.js';
 import { createObstacleSystem, type ObstacleTypeDefs } from './gameplay/obstacles.js';
 import { createPickupSystem, type PickupTypeDefs } from './gameplay/pickups.js';
-import { createTrackGenerator, type TrackConfig, type BiomeData, type TrackGenerator } from './gameplay/track-generator.js';
+import { type TrackConfig, type BiomeData } from './gameplay/track-generator.js';
+import { createPlanetCheckpoint, type PlanetCheckpointConfig, type BiomeName } from './gameplay/planet-checkpoint.js';
 import { createDawnSky } from './engine/sky.js';
 import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
@@ -164,12 +165,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // Step 5 — Load Track Generator config + biome data
-  //
-  // The Track Generator produces per-chunk ground tiles, obstacles, and pickups
-  // procedurally from biome templates. It replaces the old placeholder runway.
-  // Track config is planet-independent; biome data is loaded per-planet.
-  // For now we start with Rocky biome — Planet/Checkpoint will cycle biomes.
+  // Step 5 — Load Track Generator config + all biome data
   // -------------------------------------------------------------------------
   const trackConfigResp = await fetch('/assets/data/track.json');
   if (!trackConfigResp.ok) {
@@ -177,12 +173,17 @@ try {
   }
   const trackConfig = (await trackConfigResp.json()) as TrackConfig;
 
-  const rockyBiomeResp = await fetch('/assets/data/biomes/rocky.json');
-  if (!rockyBiomeResp.ok) {
-    throw new Error(`[main] Failed to load rocky.json: HTTP ${rockyBiomeResp.status}`);
-  }
-  const rockyBiome = (await rockyBiomeResp.json()) as BiomeData;
-  console.log('[main] Track config + Rocky biome loaded');
+  const [rockyBiome, iceBiome, volcanicBiome] = await Promise.all([
+    fetch('/assets/data/biomes/rocky.json').then(r => r.json()) as Promise<BiomeData>,
+    fetch('/assets/data/biomes/ice.json').then(r => r.json()) as Promise<BiomeData>,
+    fetch('/assets/data/biomes/volcanic.json').then(r => r.json()) as Promise<BiomeData>,
+  ]);
+  const biomeMap = new Map<BiomeName, BiomeData>([
+    ['rocky', rockyBiome],
+    ['ice', iceBiome],
+    ['volcanic', volcanicBiome],
+  ]);
+  console.log('[main] Track config + all biomes loaded (rocky, ice, volcanic)');
 
   // -------------------------------------------------------------------------
   // Step 5b — Dawn sky dome (visual only — gradient sky + sun glow + fog)
@@ -280,27 +281,31 @@ try {
   console.log('[main] UI screens + HUD created');
 
   // -------------------------------------------------------------------------
-  // Step 12 — Wire movement enable/disable + Track Generator to run lifecycle
+  // Step 12 — Load Planet/Checkpoint config + wire run lifecycle
   //
-  // Movement is disabled during title and results screens so the player
-  // doesn't run while menus are showing. Enabled only during 'running'.
-  //
-  // Track Generator is created fresh each run (new seed from run count) and
-  // disposed on death. For now all runs use Rocky biome — Planet/Checkpoint
-  // system will cycle biomes when implemented.
+  // Planet/Checkpoint owns the Track Generator lifecycle. It creates the first
+  // track on start() and swaps biomes on each gate crossing — player flies
+  // through space and lands on a new planet. main.ts no longer touches
+  // Track Generator directly.
   // -------------------------------------------------------------------------
+  const planetCfgResp = await fetch('/assets/data/planet-checkpoint.json');
+  if (!planetCfgResp.ok) {
+    throw new Error(`[main] Failed to load planet-checkpoint.json: HTTP ${planetCfgResp.status}`);
+  }
+  const planetConfig = (await planetCfgResp.json()) as PlanetCheckpointConfig;
+
   movement.setEnabled(false);
   player.anim.stopAll();
 
-  let activeTrack: TrackGenerator | null = null;
+  let activePlanetCheckpoint: ReturnType<typeof createPlanetCheckpoint> | null = null;
   let runCount = 0;
 
   runLifecycle.onStateChange((_from, to) => {
     if (to === 'running') {
-      // Dispose previous track if any (e.g. retry from results)
-      if (activeTrack) {
-        activeTrack.dispose();
-        activeTrack = null;
+      // Dispose previous planet system if any (retry from results)
+      if (activePlanetCheckpoint) {
+        activePlanetCheckpoint.dispose();
+        activePlanetCheckpoint = null;
       }
 
       // Full reset for a fresh run
@@ -309,29 +314,27 @@ try {
       player.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       player.body.setRotation({ x: 0, y: 1, z: 0, w: 0 }, true);
 
-      // Create a new Track Generator for this run
       runCount++;
-      activeTrack = createTrackGenerator(
-        engine, player, obstacles, pickups, trackConfig,
-        { biome: rockyBiome, seed: `run-${runCount}`, planetIndex: 0 },
+      activePlanetCheckpoint = createPlanetCheckpoint(
+        engine, player, movement, obstacles, pickups,
+        trackConfig, biomeMap, `run-${runCount}`, planetConfig,
       );
 
-      // Wire jump-gate event (placeholder until Planet/Checkpoint system)
-      activeTrack.onJumpGateReached(() => {
-        console.log('[main] Jump gate reached! (Planet/Checkpoint not yet implemented)');
+      // Wire planet change to run lifecycle stats
+      activePlanetCheckpoint.onPlanetChanged((_biome, _idx) => {
+        runLifecycle.reportPlanetCleared();
       });
 
       movement.setEnabled(true);
     } else if (to === 'title') {
-      // Dispose track when returning to title
-      if (activeTrack) {
-        activeTrack.dispose();
-        activeTrack = null;
+      if (activePlanetCheckpoint) {
+        activePlanetCheckpoint.dispose();
+        activePlanetCheckpoint = null;
       }
       player.anim.stopAll();
       player.anim.play('sprint');
     } else {
-      // dead / results — disable movement, keep track alive for visual
+      // dead / results — movement already disabled by player death; keep track alive for visual
       movement.setEnabled(false);
     }
   });
