@@ -86,6 +86,38 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Bottom-right — super-suit cooldown ring
+ * ---------------------------------------------------------------------------*/
+
+.hud-bottom-right {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.hud-cooldown-ring {
+  display: block;
+  filter: drop-shadow(0 0 6px rgba(102, 255, 204, 0.4));
+}
+
+.hud-cooldown-fill {
+  transition: stroke-dashoffset 0.05s linear;
+}
+
+.hud-supersuit-label {
+  color: #66ffcc;
+  font-size: 0.65rem;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 6px rgba(102, 255, 204, 0.5);
+  transition: color 0.2s ease;
+}
+
+/* ---------------------------------------------------------------------------
  * Pickup popups — float up and fade out on collection
  * ---------------------------------------------------------------------------*/
 

@@ -37,6 +37,7 @@ import { createObstacleSystem, type ObstacleTypeDefs } from './gameplay/obstacle
 import { createPickupSystem, type PickupTypeDefs } from './gameplay/pickups.js';
 import { type TrackConfig, type BiomeData } from './gameplay/track-generator.js';
 import { createPlanetCheckpoint, type PlanetCheckpointConfig, type BiomeName } from './gameplay/planet-checkpoint.js';
+import { createSuperSuitCombat, type SuperSuitCombatConfig } from './gameplay/super-suit.js';
 import { createDawnSky } from './engine/sky.js';
 import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
@@ -277,8 +278,22 @@ try {
     throw new Error(`[main] Failed to load hud.json: HTTP ${hudConfigResp.status}`);
   }
   const hudConfig = (await hudConfigResp.json()) as HUDConfig;
-  createHUD(runLifecycle, pickups, hudConfig);
-  console.log('[main] UI screens + HUD created');
+
+  // -------------------------------------------------------------------------
+  // Step 11b — Super-Suit Combat (created before HUD so ring can be passed in)
+  // -------------------------------------------------------------------------
+  const superSuitCfgResp = await fetch('/assets/data/super-suit.json');
+  if (!superSuitCfgResp.ok) {
+    throw new Error(`[main] Failed to load super-suit.json: HTTP ${superSuitCfgResp.status}`);
+  }
+  const superSuitConfig = (await superSuitCfgResp.json()) as SuperSuitCombatConfig;
+  const superSuit = createSuperSuitCombat(engine, player, input, obstacles, superSuitConfig);
+
+  // Wire super-suit obstacle breaks to run lifecycle score
+  superSuit.onObstacleBroken(() => runLifecycle.reportObstacleBroken());
+
+  createHUD(runLifecycle, pickups, hudConfig, superSuit);
+  console.log('[main] UI screens + HUD + Super-Suit Combat created');
 
   // -------------------------------------------------------------------------
   // Step 12 — Load Planet/Checkpoint config + wire run lifecycle
@@ -326,16 +341,19 @@ try {
       });
 
       movement.setEnabled(true);
+      superSuit.setEnabled(true);
     } else if (to === 'title') {
       if (activePlanetCheckpoint) {
         activePlanetCheckpoint.dispose();
         activePlanetCheckpoint = null;
       }
+      superSuit.setEnabled(false);
       player.anim.stopAll();
       player.anim.play('sprint');
     } else {
-      // dead / results — movement already disabled by player death; keep track alive for visual
+      // dead / results — disable everything
       movement.setEnabled(false);
+      superSuit.setEnabled(false);
     }
   });
 

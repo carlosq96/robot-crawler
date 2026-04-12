@@ -132,6 +132,12 @@ export interface ObstacleSystem {
   isBreakable(handle: ObstacleHandle): boolean;
 
   /**
+   * Return the world-space center position of the obstacle, or null if the
+   * handle is not active. Used by Super-Suit Combat for cone filtering.
+   */
+  getObstaclePosition(handle: ObstacleHandle): { x: number; y: number; z: number } | null;
+
+  /**
    * Subscribe to the obstacle-hit event. Fired once per physics step at most,
    * with the type string of the obstacle that killed the player.
    *
@@ -424,6 +430,12 @@ export function createObstacleSystem(
 
     isBreakable(handle: ObstacleHandle): boolean {
       return active.get(handle)?.breakable ?? false;
+    },
+
+    getObstaclePosition(handle: ObstacleHandle): { x: number; y: number; z: number } | null {
+      const e = active.get(handle);
+      if (!e) return null;
+      return { x: e.cx, y: e.cy, z: e.cz };
     },
 
     onObstacleHit(cb: (type: string) => void): () => void {

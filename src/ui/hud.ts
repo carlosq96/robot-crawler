@@ -26,6 +26,7 @@
 
 import type { RunLifecycle } from '../gameplay/run-lifecycle.js';
 import type { PickupSystem } from '../gameplay/pickups.js';
+import type { SuperSuitCombat } from '../gameplay/super-suit.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -63,15 +64,21 @@ export interface HUD {
  * @param runLifecycle - Live run state + stats source.
  * @param pickups      - Pickup system used to subscribe to collection events.
  * @param config       - Loaded from assets/data/hud.json by caller.
+ * @param superSuit    - Optional — if provided, draws the cooldown ring.
  */
 export function createHUD(
   runLifecycle: RunLifecycle,
   pickups: PickupSystem,
   config: HUDConfig,
+  superSuit?: SuperSuitCombat,
 ): HUD {
   // -------------------------------------------------------------------------
   // Build DOM tree
   // -------------------------------------------------------------------------
+
+  // SVG circle circumference for a r=18 circle: 2π×18 ≈ 113.1
+  const RING_R = 18;
+  const RING_CIRC = 2 * Math.PI * RING_R;
 
   const root = document.createElement('div');
   root.id = 'hud';
@@ -91,16 +98,31 @@ export function createHUD(
       </div>
     </div>
 
+    <div class="hud-bottom-right">
+      <svg class="hud-cooldown-ring" viewBox="0 0 44 44" width="52" height="52">
+        <circle class="hud-cooldown-bg" cx="22" cy="22" r="${RING_R}"
+          fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+        <circle class="hud-cooldown-fill" cx="22" cy="22" r="${RING_R}"
+          fill="none" stroke="#66ffcc" stroke-width="3"
+          stroke-dasharray="${RING_CIRC}" stroke-dashoffset="0"
+          stroke-linecap="round"
+          transform="rotate(-90 22 22)"/>
+      </svg>
+      <div class="hud-supersuit-label">SUPER</div>
+    </div>
+
     <div class="hud-popups"></div>
   `;
 
   document.body.appendChild(root);
 
   // Cache element references — queried once, never re-queried in the hot path.
-  const distanceEl  = root.querySelector('.hud-distance')      as HTMLDivElement;
-  const scoreEl     = root.querySelector('.hud-score')         as HTMLDivElement;
+  const distanceEl  = root.querySelector('.hud-distance')       as HTMLDivElement;
+  const scoreEl     = root.querySelector('.hud-score')          as HTMLDivElement;
   const stardustEl  = root.querySelector('.hud-stardust-count') as HTMLSpanElement;
-  const popupsEl    = root.querySelector('.hud-popups')        as HTMLDivElement;
+  const popupsEl    = root.querySelector('.hud-popups')         as HTMLDivElement;
+  const ringFill    = root.querySelector('.hud-cooldown-fill')  as SVGCircleElement;
+  const superLabel  = root.querySelector('.hud-supersuit-label') as HTMLDivElement;
 
   // -------------------------------------------------------------------------
   // rAF loop — updates text each rendered frame while visible
@@ -113,6 +135,7 @@ export function createHUD(
   let lastDistance = -1;
   let lastScore    = -1;
   let lastStardust = -1;
+  let lastCooldownFrac = -1;
 
   function tick(): void {
     if (disposed) return;
@@ -130,6 +153,19 @@ export function createHUD(
     if (stats.crystalsCollected !== lastStardust) {
       stardustEl.textContent = `${stats.crystalsCollected}`;
       lastStardust = stats.crystalsCollected;
+    }
+
+    // Cooldown ring — only if super-suit was provided
+    if (superSuit && ringFill) {
+      const frac = superSuit.getCooldownFraction();
+      if (frac !== lastCooldownFrac) {
+        // dashoffset: 0 = full ring (ready), RING_CIRC = empty ring (just fired)
+        ringFill.style.strokeDashoffset = `${RING_CIRC * (1 - frac)}`;
+        const isReady = superSuit.getState() === 'ready';
+        ringFill.style.stroke = isReady ? '#66ffcc' : 'rgba(102,255,204,0.35)';
+        superLabel.style.color = isReady ? '#66ffcc' : 'rgba(102,255,204,0.4)';
+        lastCooldownFrac = frac;
+      }
     }
 
     rafId = requestAnimationFrame(tick);

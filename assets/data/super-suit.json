@@ -1,0 +1,6 @@
+{
+  "cooldownSec": 10.0,
+  "activeSec": 0.3,
+  "attackRange": 6.0,
+  "attackConeHalfWidth": 3.0
+}
