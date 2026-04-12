@@ -43,6 +43,7 @@ import { createTitleScreen } from './ui/title-screen.js';
 import { createResultsScreen } from './ui/results-screen.js';
 import { createHUD, type HUDConfig } from './ui/hud.js';
 import { createAudioSystem, type AudioSystemConfig } from './engine/audio-system.js';
+import { createSettings } from './ui/settings.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -285,7 +286,14 @@ try {
   // -------------------------------------------------------------------------
   // Step 11 — Create UI screens (Title + Results) + HUD
   // -------------------------------------------------------------------------
-  createTitleScreen(runLifecycle);
+  const settings = createSettings(audio);
+  const titleScreen = createTitleScreen(runLifecycle, () => {
+    settings.show();
+    const unsub = settings.onHidden(() => {
+      if (runLifecycle.getState() === 'title') titleScreen.show();
+      unsub();
+    });
+  });
   createResultsScreen(runLifecycle);
 
   const hudConfigResp = await fetch('/assets/data/hud.json');

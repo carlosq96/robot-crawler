@@ -59,7 +59,7 @@ export interface TitleScreen {
  * @param runLifecycle - The run lifecycle controller used to start a new run.
  * @returns TitleScreen handle for manual show/hide/dispose.
  */
-export function createTitleScreen(runLifecycle: RunLifecycle): TitleScreen {
+export function createTitleScreen(runLifecycle: RunLifecycle, onSettings?: () => void): TitleScreen {
   // -------------------------------------------------------------------------
   // Build DOM structure
   // -------------------------------------------------------------------------
@@ -84,10 +84,26 @@ export function createTitleScreen(runLifecycle: RunLifecycle): TitleScreen {
   startBtn.textContent = 'START';
   startBtn.setAttribute('type', 'button');
 
+  // Gear button — bottom-right corner, always visible when title is open
+  const gearBtn = document.createElement('button');
+  gearBtn.setAttribute('type', 'button');
+  gearBtn.setAttribute('aria-label', 'Settings');
+  gearBtn.textContent = '⚙';
+  gearBtn.style.cssText = [
+    'position:absolute;bottom:1.5rem;right:1.5rem',
+    'background:none;border:1px solid #444;color:#888',
+    'font-size:1.4rem;width:2.6rem;height:2.6rem',
+    'border-radius:50%;cursor:pointer;line-height:1',
+    'transition:color 0.2s,border-color 0.2s',
+  ].join(';');
+  gearBtn.addEventListener('mouseenter', () => { gearBtn.style.color = '#fff'; gearBtn.style.borderColor = '#fff'; });
+  gearBtn.addEventListener('mouseleave', () => { gearBtn.style.color = '#888'; gearBtn.style.borderColor = '#444'; });
+
   panel.appendChild(heading);
   panel.appendChild(subtitle);
   panel.appendChild(startBtn);
   overlay.appendChild(panel);
+  overlay.appendChild(gearBtn);
   document.body.appendChild(overlay);
 
   // -------------------------------------------------------------------------
@@ -99,7 +115,13 @@ export function createTitleScreen(runLifecycle: RunLifecycle): TitleScreen {
     runLifecycle.start(seed);
   }
 
+  function handleGear(): void {
+    hide();
+    onSettings?.();
+  }
+
   startBtn.addEventListener('click', handleStart);
+  gearBtn.addEventListener('click', handleGear);
 
   // -------------------------------------------------------------------------
   // Subscribe to lifecycle state changes
@@ -129,6 +151,7 @@ export function createTitleScreen(runLifecycle: RunLifecycle): TitleScreen {
 
   function dispose(): void {
     startBtn.removeEventListener('click', handleStart);
+    gearBtn.removeEventListener('click', handleGear);
     unsubscribeStateChange();
     overlay.remove();
   }
