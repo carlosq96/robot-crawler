@@ -1,0 +1,8 @@
+{
+  "hints": [
+    { "id": "dodge",  "text": "A / D  —  DODGE",       "triggerAtSec":  2.0, "maxDurationSec": 4.0 },
+    { "id": "jump",   "text": "SPACE  —  JUMP",         "triggerAtSec":  8.0, "maxDurationSec": 4.0 },
+    { "id": "slide",  "text": "SHIFT  —  SLIDE",        "triggerAtSec": 14.0, "maxDurationSec": 4.0 },
+    { "id": "attack", "text": "CLICK  —  SUPER SUIT",   "triggerAtSec": 20.0, "maxDurationSec": 4.0 }
+  ]
+}

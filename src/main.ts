@@ -44,6 +44,7 @@ import { createResultsScreen } from './ui/results-screen.js';
 import { createHUD, type HUDConfig } from './ui/hud.js';
 import { createAudioSystem, type AudioSystemConfig } from './engine/audio-system.js';
 import { createSettings } from './ui/settings.js';
+import { createTutorialOverlays, type TutorialConfig } from './ui/tutorial-overlays.js';
 
 // ---------------------------------------------------------------------------
 // Canvas + fallback
@@ -390,6 +391,17 @@ try {
   obstacles.onObstacleHit((type) => audio.playSfx(type.includes('ice') ? 'obstacle_hit_ice' : 'obstacle_hit_rock'));
   pickups.onPickup(() => audio.playSfx('pickup_stardust'));
   superSuit.onAttackResolved(() => audio.playSfx('super_suit'));
+
+  // -------------------------------------------------------------------------
+  // Step 13 — Tutorial Overlays
+  // -------------------------------------------------------------------------
+  const tutorialConfigResp = await fetch('/assets/data/tutorial.json');
+  if (!tutorialConfigResp.ok) {
+    throw new Error(`[main] Failed to load tutorial.json: HTTP ${tutorialConfigResp.status}`);
+  }
+  const tutorialConfig = (await tutorialConfigResp.json()) as TutorialConfig;
+  createTutorialOverlays(input, runLifecycle, tutorialConfig);
+  console.log('[main] Tutorial Overlays created');
 
   console.log('[main] Space Runner ready — click START to begin');
 } catch (err) {
