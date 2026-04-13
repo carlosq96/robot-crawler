@@ -1,6 +1,16 @@
 {
   "version": 1,
   "skills": {
+    "music": {
+      "source": "elevenlabs/skills",
+      "sourceType": "github",
+      "computedHash": "9d42e873a5f9ff3de54742e598f5f8321f12f7ae2b38de08bb40fb78b113bb01"
+    },
+    "sound-effects": {
+      "source": "elevenlabs/skills",
+      "sourceType": "github",
+      "computedHash": "54ec05122413cbc956b28fbd81c676e44eb0fdbbf6459ee3b367b2c7a1350b02"
+    },
     "threejs-animation": {
       "source": "cloudai-x/threejs-skills",
       "sourceType": "github",

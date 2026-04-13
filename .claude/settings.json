@@ -16,7 +16,20 @@
       "WebFetch(domain:skills.sh)",
       "Bash(find docs/engine-reference/godot docs/engine-reference/unity docs/engine-reference/unreal -depth -delete)",
       "Bash(npx tsc:*)",
-      "Bash(npx ctx7@latest library \"Three.js\" \"ShaderMaterial uniforms side BackSide\")"
+      "Bash(npx ctx7@latest library \"Three.js\" \"ShaderMaterial uniforms side BackSide\")",
+      "Read(//Users/cquinterom096/**)",
+      "mcp__chrome-devtools__evaluate_script",
+      "mcp__chrome-devtools__list_console_messages",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('animation', d\\), indent=2\\)\\)\")",
+      "Bash(psql --version)",
+      "Bash(psql -U postgres -c \"\\\\l\")",
+      "Bash(psql -U cquinterom096 -c \"CREATE DATABASE space_runner;\")",
+      "mcp__chrome-devtools__navigate_page",
+      "Bash(curl -sv http://localhost:3001/api/runs/top)",
+      "Bash(node --env-file=.env dist/server/index.js)",
+      "Bash(curl -s http://localhost:3001/api/runs/top)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
     ],
     "deny": [
       "Bash(rm -rf *)",

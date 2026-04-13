@@ -5,8 +5,8 @@
   "chunksBehind": 1,
   "lateralBound": 8,
   "jumpGate": {
-    "torusRadius": 4,
-    "torusTube": 0.5,
+    "torusRadius": 2.5,
+    "torusTube": 0.4,
     "triggerHalfWidth": 8,
     "triggerHalfHeight": 2.5,
     "triggerHalfDepth": 0.5,
