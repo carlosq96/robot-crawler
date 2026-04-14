@@ -39,7 +39,8 @@ export interface AudioSystem {
 }
 
 interface MusicTrack {
-  source: AudioBufferSourceNode;
+  el: HTMLAudioElement;
+  mediaSource: MediaElementAudioSourceNode;
   gain: GainNode;
 }
 
@@ -81,10 +82,11 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
     }
   }
 
-  await Promise.all([
-    ...Object.entries(config.sfxPaths).map(([name, url]) => loadBuffer(name, url)),
-    ...Object.entries(config.musicPaths).map(([name, url]) => loadBuffer(name, url)),
-  ]);
+  // Only preload SFX — music streams via <audio> element to avoid
+  // decodeAudioData memory/failure issues with large files.
+  await Promise.all(
+    Object.entries(config.sfxPaths).map(([name, url]) => loadBuffer(name, url)),
+  );
 
   let currentMusic: MusicTrack | null = null;
 
@@ -105,13 +107,17 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
     const now = ctx.currentTime;
     track.gain.gain.setValueAtTime(track.gain.gain.value, now);
     track.gain.gain.linearRampToValueAtTime(0, now + durationSec);
-    track.source.stop(now + durationSec);
+    // Pause the element after the fade completes
+    setTimeout(() => {
+      track.el.pause();
+      track.el.src = '';
+    }, (durationSec + 0.1) * 1000);
   }
 
   function playMusic(name: string, opts: { loop?: boolean; fadeInSec?: number } = {}): void {
     const { loop = true, fadeInSec = 1.0 } = opts;
-    const buffer = bufferCache.get(name);
-    if (!buffer) {
+    const url = config.musicPaths[name];
+    if (!url) {
       console.warn(`[AudioSystem] playMusic: unknown key "${name}"`);
       return;
     }
@@ -122,26 +128,24 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
       currentMusic = null;
     }
 
+    // Use <audio> element + MediaElementAudioSourceNode so the file streams
+    // instead of being fully decoded into memory (correct approach for music).
+    const el = new Audio(url);
+    el.loop = loop;
+    const mediaSource = ctx.createMediaElementSource(el);
     const trackGain = ctx.createGain();
     trackGain.gain.value = 0;
+    mediaSource.connect(trackGain);
     trackGain.connect(musicGain);
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.loop = loop;
-    source.connect(trackGain);
-
-    // Resume the context explicitly here — the gesture handler may not have
-    // resolved yet when playMusic is called in the same event-loop tick as
-    // the user's click. ctx.resume() is idempotent when already running.
     ctx.resume().then(() => {
-      source.start(0);
+      el.play().catch((e) => console.warn('[AudioSystem] playMusic play() failed:', e));
       const now = ctx.currentTime;
       trackGain.gain.setValueAtTime(0, now);
       trackGain.gain.linearRampToValueAtTime(1, now + fadeInSec);
     }).catch((e) => console.warn('[AudioSystem] playMusic resume failed:', e));
 
-    currentMusic = { source, gain: trackGain };
+    currentMusic = { el, mediaSource, gain: trackGain };
   }
 
   function stopMusic(opts: { fadeOutSec?: number } = {}): void {
@@ -168,7 +172,11 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
   }
 
   function dispose(): void {
-    stopMusic({ fadeOutSec: 0 });
+    if (currentMusic) {
+      currentMusic.el.pause();
+      currentMusic.el.src = '';
+      currentMusic = null;
+    }
     ctx.close();
     bufferCache.clear();
   }
