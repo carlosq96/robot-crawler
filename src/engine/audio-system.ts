@@ -65,7 +65,6 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
 
   // Preload buffers
   const bufferCache = new Map<string, AudioBuffer>();
-  const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate);
 
   async function loadBuffer(name: string, url: string): Promise<void> {
     try {
@@ -74,9 +73,11 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
       bufferCache.set(name, audioBuffer);
+      console.log(`[AudioSystem] Loaded "${name}" (${audioBuffer.duration.toFixed(1)}s)`);
     } catch (err) {
       console.warn(`[AudioSystem] Failed to load "${name}" from ${url}:`, err);
-      bufferCache.set(name, silentBuffer);
+      // Do NOT cache a silent fallback — missing key means "failed to load"
+      // so playMusic/playSfx will log a warning instead of playing silence.
     }
   }
 
@@ -129,11 +130,16 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
     source.buffer = buffer;
     source.loop = loop;
     source.connect(trackGain);
-    source.start(0);
 
-    const now = ctx.currentTime;
-    trackGain.gain.setValueAtTime(0, now);
-    trackGain.gain.linearRampToValueAtTime(1, now + fadeInSec);
+    // Resume the context explicitly here — the gesture handler may not have
+    // resolved yet when playMusic is called in the same event-loop tick as
+    // the user's click. ctx.resume() is idempotent when already running.
+    ctx.resume().then(() => {
+      source.start(0);
+      const now = ctx.currentTime;
+      trackGain.gain.setValueAtTime(0, now);
+      trackGain.gain.linearRampToValueAtTime(1, now + fadeInSec);
+    }).catch((e) => console.warn('[AudioSystem] playMusic resume failed:', e));
 
     currentMusic = { source, gain: trackGain };
   }
