@@ -11,9 +11,9 @@
         { "type": "ice_pillar", "x": 3, "z": -16 }
       ],
       "pickups": [
-        { "type": "stardust", "x": 0, "z": -6 },
-        { "type": "stardust", "x": 0, "z": -10 },
-        { "type": "stardust", "x": 0, "z": -14 }
+        { "type": "stardust", "x": 5, "z": -6 },
+        { "type": "stardust", "x": -5, "z": -10 },
+        { "type": "stardust", "x": 4, "z": -14 }
       ]
     },
     {

@@ -38,8 +38,8 @@
       ],
       "pickups": [
         { "type": "stardust", "x": 5, "z": -3 },
-        { "type": "stardust", "x": 5, "z": -9 },
-        { "type": "stardust", "x": 5, "z": -17 }
+        { "type": "stardust", "x": -3, "z": -9 },
+        { "type": "stardust", "x": 2, "z": -17 }
       ]
     },
     {

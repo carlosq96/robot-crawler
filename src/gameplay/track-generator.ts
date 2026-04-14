@@ -339,7 +339,10 @@ export function createTrackGenerator(
 
       for (const pu of template.pickups) {
         const worldZ = chunkStartZ + pu.z;
-        const handle = pickups.spawn(pu.type, pu.x, 0.5, worldZ);
+        // Jitter X so pickups don't form predictable lines across consecutive chunks
+        const xJitter = (Math.random() * 2 - 1) * 2.0;
+        const spawnX = Math.max(-(lateralBound - 1.5), Math.min(lateralBound - 1.5, pu.x + xJitter));
+        const handle = pickups.spawn(pu.type, spawnX, 0.5, worldZ);
         pickupHandles.push(handle);
       }
     }
