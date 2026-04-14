@@ -42,13 +42,14 @@
       "death":  0.05
     },
     "startOffsets": {
-      "jump": 0.9999
+      "jump": 0.6
     },
     "timeScales": {
       "_comment": "Real RunFast clip is now in use (split export). Start at 1.0 — if the default pace feels too jogging-y, bump to 1.2-1.5.",
       "sprint": 1.0,
       "run":    1.0,
-      "slide":  1.0
+      "slide":  1.0,
+      "jump":   0
     },
     "events": []
   }

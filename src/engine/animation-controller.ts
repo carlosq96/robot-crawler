@@ -366,8 +366,9 @@ export function createAnimationController(
     // Apply per-state time scale (clamped to sane range to prevent accidents
     // like negative scales reversing the clip, or extreme scales producing
     // unreadable motion). Default 1.0 when no entry exists.
+    // 0 is allowed — it freezes the clip at whatever startOffset seeks to.
     const rawTimeScale = config.timeScales?.[stateName] ?? 1.0;
-    const clampedTimeScale = Math.max(0.1, Math.min(rawTimeScale, 4.0));
+    const clampedTimeScale = Math.max(0, Math.min(rawTimeScale, 4.0));
     if (clampedTimeScale !== 1.0) {
       action.setEffectiveTimeScale(clampedTimeScale);
     }
@@ -607,7 +608,7 @@ export function createAnimationController(
         // reset() wipes timeScale back to 1; we need the configured value
         // so the next play() cycle gets the correct speed.
         const rawTS = config.timeScales?.[stateName] ?? 1.0;
-        const clampedTS = Math.max(0.1, Math.min(rawTS, 4.0));
+        const clampedTS = Math.max(0, Math.min(rawTS, 4.0));
         if (clampedTS !== 1.0) {
           action.setEffectiveTimeScale(clampedTS);
         }
