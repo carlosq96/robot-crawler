@@ -367,6 +367,7 @@ try {
 
       movement.setEnabled(true);
       superSuit.setEnabled(true);
+      audio.playMusic('stellar_drift', { loop: true, fadeInSec: 1.5 });
     } else if (to === 'title') {
       if (activePlanetCheckpoint) {
         activePlanetCheckpoint.dispose();
@@ -375,10 +376,12 @@ try {
       superSuit.setEnabled(false);
       player.anim.stopAll();
       player.anim.play('sprint');
+      audio.stopMusic({ fadeOutSec: 1.0 });
     } else {
       // dead / results — disable everything
       movement.setEnabled(false);
       superSuit.setEnabled(false);
+      audio.stopMusic({ fadeOutSec: 2.0 });
     }
   });
 

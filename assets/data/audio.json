@@ -11,5 +11,7 @@
     "jump_gate_warp":     "/assets/audio/sfx/jump_gate_warp.mp3",
     "player_death":       "/assets/audio/sfx/player_death.mp3"
   },
-  "musicPaths": {}
+  "musicPaths": {
+    "stellar_drift": "/assets/audio/music/5%20-%20Stellar%20Drift%20.mp3"
+  }
 }
