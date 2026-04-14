@@ -138,8 +138,11 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
     mediaSource.connect(trackGain);
     trackGain.connect(musicGain);
 
+    // play() MUST be called synchronously within the user-gesture call stack
+    // or browsers block it (autoplay policy). Gain automation goes in .then()
+    // since it needs ctx.currentTime after resume.
+    el.play().catch((e) => console.warn('[AudioSystem] playMusic play() failed:', e));
     ctx.resume().then(() => {
-      el.play().catch((e) => console.warn('[AudioSystem] playMusic play() failed:', e));
       const now = ctx.currentTime;
       trackGain.gain.setValueAtTime(0, now);
       trackGain.gain.linearRampToValueAtTime(1, now + fadeInSec);
