@@ -137,29 +137,16 @@ export async function createAudioSystem(config: AudioSystemConfig): Promise<Audi
 
     const el = new Audio(url);
     el.loop = loop;
-    el.volume = 0; // start silent for fade-in
+    el.volume = _musicVolume;
     currentMusicEl = el;
 
-    console.log(`[AudioSystem] playMusic "${name}" url=${url} targetVol=${_musicVolume}`);
+    el.addEventListener('error', () => console.error('[AudioSystem] music load error — code:', el.error?.code, 'msg:', el.error?.message));
+    el.addEventListener('canplaythrough', () => console.log('[AudioSystem] music canplaythrough'));
 
-    el.play().catch((e) => console.warn('[AudioSystem] playMusic play() failed:', e));
-
-    // Fade in
-    if (fadeInSec > 0) {
-      const target = _musicVolume;
-      const steps = 20;
-      const intervalMs = (fadeInSec * 1000) / steps;
-      const increment = target / steps;
-      let step = 0;
-      musicFadeTimer = setInterval(() => {
-        if (el !== currentMusicEl) { clearFadeTimer(); return; }
-        step++;
-        el.volume = Math.min(target, increment * step);
-        if (step >= steps) clearFadeTimer();
-      }, intervalMs);
-    } else {
-      el.volume = _musicVolume;
-    }
+    console.log(`[AudioSystem] playMusic "${name}" vol=${_musicVolume} url=${url}`);
+    el.play()
+      .then(() => console.log(`[AudioSystem] play() resolved — paused=${el.paused} volume=${el.volume} muted=${el.muted} currentTime=${el.currentTime.toFixed(2)}`))
+      .catch((e) => console.warn('[AudioSystem] play() REJECTED:', e));
   }
 
   function stopMusic(opts: { fadeOutSec?: number } = {}): void {
