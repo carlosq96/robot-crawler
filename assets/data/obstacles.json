@@ -24,6 +24,21 @@
       "mesh": { "shape": "sphere", "radius": 0.8, "color": "#440044" },
       "hitRadius": 0.7,
       "breakable": false
+    },
+    "low_arch": {
+      "mesh": {
+        "shape": "box",
+        "width": 14,
+        "height": 0.35,
+        "depth": 1.0,
+        "color": "#331100",
+        "emissiveColor": "#ff4400",
+        "emissiveIntensity": 1.5
+      },
+      "hitRadius": 1.0,
+      "breakable": false,
+      "overhead": true,
+      "spawnYOffset": 1.1
     }
   }
 }

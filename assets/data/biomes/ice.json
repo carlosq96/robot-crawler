@@ -56,6 +56,16 @@
       ]
     },
     {
+      "id": "ice_low_beam",
+      "obstacles": [
+        { "type": "low_arch", "x": 0, "z": -8 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 4, "z": -3 },
+        { "type": "stardust", "x": -4, "z": -14 }
+      ]
+    },
+    {
       "id": "ice_gauntlet",
       "obstacles": [
         { "type": "spider", "x": -3, "z": -4 },

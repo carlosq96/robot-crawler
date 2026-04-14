@@ -51,15 +51,31 @@ interface ObstacleMeshDef {
   radiusTop?: number;
   radiusBottom?: number;
   color: string;
+  /** Optional emissive colour for glowing/hazard obstacles. */
+  emissiveColor?: string;
+  /** Emissive intensity (0 = no glow). Default 0. */
+  emissiveIntensity?: number;
 }
 
 /** Full type definition for one obstacle variant. */
 interface ObstacleTypeDef {
   mesh: ObstacleMeshDef;
-  /** XZ hit radius (meters). Squared internally to avoid sqrt in hot path. */
+  /** XZ hit radius (meters). Squared internally to avoid sqrt in hot path.
+   *  For overhead obstacles this is used as a Z-only depth radius instead. */
   hitRadius: number;
   /** If true, breakObstacle() emits onObstacleBroken before despawning. */
   breakable: boolean;
+  /**
+   * If true, this obstacle kills from above — player must slide to survive.
+   * Hit check: player capsule TOP must be below entity.bottomY.
+   * Detection uses Z-depth only (obstacle spans the full track width).
+   */
+  overhead?: boolean;
+  /**
+   * Y offset above the spawn floor to place the obstacle's bottom face.
+   * Default 0 (rests on the floor). Set > 0 for elevated/overhead hazards.
+   */
+  spawnYOffset?: number;
 }
 
 /**
@@ -186,9 +202,13 @@ interface ObstacleEntity {
   cz: number;
   /** Top of the obstacle in world Y — player capsule bottom must be above this to jump over. */
   topY: number;
+  /** Bottom of the obstacle in world Y — used for overhead kill checks. */
+  bottomY: number;
   /** hitRadius² — cached to avoid per-step multiplication. */
   hitRadiusSq: number;
   breakable: boolean;
+  /** True for overhead obstacles: kills if player is too tall (must slide). */
+  overhead: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,36 +336,45 @@ export function createObstacleSystem(
     const py = bodyPos.y;
     const pz = bodyPos.z;
 
-    // Player capsule bottom Y (center - halfHeight - radius = py - 0.9).
-    // If the capsule bottom is above the obstacle top, the player jumped
-    // over it — skip the hit check. Obstacle top = entity.cy + entity.halfHeight.
-    // A small tolerance (0.2m) prevents grazing kills at the apex.
-    const capsuleBottomY = py - 0.9;
+    // Capsule top/bottom from body center.
+    // Reads the LIVE collider halfHeight so slide-crouching (halfHeight 0.1)
+    // is correctly shorter than standing (halfHeight 0.5).
+    // capsuleRadius = 0.4 is a project constant (player.json: capsuleRadius).
+    const CAPSULE_RADIUS = 0.4;
+    const capsuleHalfH   = player.body.collider(0).halfHeight();
+    const capsuleBottomY = py - capsuleHalfH - CAPSULE_RADIUS;
+    const capsuleTopY    = py + capsuleHalfH + CAPSULE_RADIUS;
 
     for (const [handle, entity] of active) {
-      // Y-axis check: skip obstacles the player has jumped over
-      if (capsuleBottomY > entity.topY + 0.2) {
-        void handle;
-        continue;
+      void handle; // suppress TS unused-variable warning on map iteration
+
+      if (entity.overhead) {
+        // ----------------------------------------------------------------
+        // Overhead obstacle — kills if player is too tall to clear it.
+        // Slide crouches the capsule, lowering capsuleTopY below bottomY.
+        // Detection is Z-depth only: the beam spans the full track width
+        // so there is no lateral dodge — the player MUST slide.
+        // ----------------------------------------------------------------
+        if (capsuleTopY < entity.bottomY - 0.05) continue; // slid under
+
+        _dz = pz - entity.cz;
+        if (_dz * _dz >= entity.hitRadiusSq) continue; // outside Z range
+      } else {
+        // ----------------------------------------------------------------
+        // Ground obstacle — skip if player has jumped over it.
+        // A 0.2m tolerance prevents grazing kills at the apex.
+        // ----------------------------------------------------------------
+        if (capsuleBottomY > entity.topY + 0.2) continue; // jumped over
+
+        _dx = px - entity.cx;
+        _dz = pz - entity.cz;
+        if (_dx * _dx + _dz * _dz >= entity.hitRadiusSq) continue;
       }
 
-      _dx = px - entity.cx;
-      _dz = pz - entity.cz;
-      const distSq = _dx * _dx + _dz * _dz;
-
-      if (distSq < entity.hitRadiusSq) {
-        // On-touch death: deal lethal damage (maxHp=1 in Space Runner)
-        player.takeDamage(999);
-
-        // Notify subscribers with the type that caused the hit
-        for (const cb of hitSubscribers) cb(entity.type);
-
-        // One death per tick — stop checking remaining obstacles
-        break;
-      }
-
-      // Suppress TS unused-variable warning on handle; map iteration needs it.
-      void handle;
+      // On-touch death
+      player.takeDamage(999);
+      for (const cb of hitSubscribers) cb(entity.type);
+      break; // one death per tick
     }
   });
 
@@ -366,13 +395,20 @@ export function createObstacleSystem(
       const geometry = buildGeometry(def.mesh);
       const material = new THREE.MeshStandardMaterial({
         color: new THREE.Color(def.mesh.color),
+        emissive: def.mesh.emissiveColor
+          ? new THREE.Color(def.mesh.emissiveColor)
+          : new THREE.Color(0x000000),
+        emissiveIntensity: def.mesh.emissiveIntensity ?? 0,
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow    = true;
       mesh.receiveShadow = true;
 
-      // Place mesh so its bottom rests on y (floor plane)
-      const yCenter = y + halfHeight(def.mesh);
+      // spawnYOffset elevates the obstacle above the floor (for overhead hazards).
+      // yFloor is the effective floor Y the obstacle bottom rests on.
+      const yFloor  = y + (def.spawnYOffset ?? 0);
+      const yHalf   = halfHeight(def.mesh);
+      const yCenter = yFloor + yHalf;
       mesh.position.set(x, yCenter, z);
       engine.scene.add(mesh);
 
@@ -383,9 +419,11 @@ export function createObstacleSystem(
         cx: x,
         cy: yCenter,
         cz: z,
-        topY: y + halfHeight(def.mesh) * 2, // top of the obstacle in world Y
+        topY:    yFloor + yHalf * 2,
+        bottomY: yFloor,
         hitRadiusSq: def.hitRadius * def.hitRadius,
         breakable: def.breakable,
+        overhead: def.overhead ?? false,
       });
 
       return handle;

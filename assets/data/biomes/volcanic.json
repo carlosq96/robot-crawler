@@ -55,6 +55,16 @@
       ]
     },
     {
+      "id": "volcanic_low_beam",
+      "obstacles": [
+        { "type": "low_arch", "x": 0, "z": -8 }
+      ],
+      "pickups": [
+        { "type": "stardust", "x": 3, "z": -3 },
+        { "type": "stardust", "x": -3, "z": -14 }
+      ]
+    },
+    {
       "id": "volcanic_hellscape",
       "obstacles": [
         { "type": "boulder", "x": -5, "z": -3 },
