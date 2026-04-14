@@ -355,7 +355,7 @@ export function createObstacleSystem(
         // Detection is Z-depth only: the beam spans the full track width
         // so there is no lateral dodge — the player MUST slide.
         // ----------------------------------------------------------------
-        if (capsuleTopY < entity.bottomY - 0.05) continue; // slid under
+        if (capsuleTopY < entity.bottomY - 0.1) continue; // slid under
 
         _dz = pz - entity.cz;
         if (_dz * _dz >= entity.hitRadiusSq) continue; // outside Z range

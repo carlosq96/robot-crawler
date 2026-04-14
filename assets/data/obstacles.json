@@ -38,7 +38,7 @@
       "hitRadius": 1.0,
       "breakable": false,
       "overhead": true,
-      "spawnYOffset": 1.1
+      "spawnYOffset": 1.35
     }
   }
 }
